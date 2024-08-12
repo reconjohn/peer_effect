@@ -3,9 +3,8 @@ source("./syntax/Data.R")
 
 ### f1 
 ### installation trend
-ftr <- dfPV %>% 
+dfPV %>% 
   mutate(Tech = "PV (Seattle)") %>% 
-  dplyr::select(-cluster) %>% 
   rbind(dfEV %>% 
           mutate(Tech = "EV (Seattle)")) %>% 
   filter(adopter == 1) %>% 
@@ -82,7 +81,7 @@ sev <- f_map(dfEV, seattle_tracts, "53", "EV (Seattle)")
 shp <- f_map(dfPump, seattle_tracts, "53", "HP (Seattle)")
 vpv <- f_map(dfVT, temp, "50", "PV (Vermont)")
 
-fm <- ggarrange(spv,vpv,sev,shp,
+garrange(spv,vpv,sev,shp,
                 labels = NULL,
                 ncol = 4, nrow = 1,
                 common.legend = TRUE, legend = "bottom",
@@ -90,11 +89,6 @@ fm <- ggarrange(spv,vpv,sev,shp,
                 # font.label = list(size = 10, color = "black", face = "bold", 
                 #                   family = NULL, position = "top")
 )
-# 
-fm1 <- annotate_figure(fm, 
-                       top = textGrob("b", x = 0.08))
-
-ggsave("./Fig/fm.png", ggarrange(ftr, fm1, nrow = 2), width = 9, height= 7, dpi = 300)
 
 
 ### f2 
@@ -164,7 +158,7 @@ dd <- rbind(
   filter(Dist < 1100) 
 
 
-fd <- dd %>% 
+dd %>% 
   mutate(adopter = factor(adopter, levels = c("Y","N")),
          tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
                                         "HP (Seattle)")),
@@ -246,7 +240,7 @@ dt <- rbind(
     mutate(adopter = "N")
 ) 
 
-ft <- dt %>% 
+dt %>% 
   mutate(adopter = factor(adopter, levels = c("Y","N")),
          tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
                                         "HP (Seattle)")),
@@ -260,19 +254,6 @@ ft <- dt %>%
   facet_wrap(~tech, scale = "free", nrow = 1) +
   theme_classic() + 
   theme(legend.position = "none")
-
-
-figure <- ggarrange(fd, ft,
-                    heights = c(1,1),
-                    labels = NULL,
-                    ncol = 1, nrow = 2,
-                    common.legend = TRUE, legend = "right",
-                    align = "hv", 
-                    font.label = list(size = 10, color = "black", face = "bold", 
-                                      family = NULL, position = "top"))
-
-f <- annotate_figure(figure, left = textGrob("Average neighboring installed housing buildings", rot = 90, vjust = 1, 
-                                              gp = gpar(cex = 1)))
 
 
 # density 
@@ -303,7 +284,7 @@ dff <- dd %>%
          r_dff = s_diff/ adpt)
 
 
-ff <- dff %>% 
+dff %>% 
   ggplot() + 
   geom_col(position = "dodge", aes(y = diff, x = Dist), fill = "gray50") +
   # geom_point(aes(y = r_dff, x = Dist), color = "red") +
@@ -321,8 +302,6 @@ ff <- dff %>%
                                          name = "Number difference per\nunit building (black point)")) +
   theme_classic()
 
-ggsave("./Fig/f1.png", 
-       ggarrange(f, ff, nrow = 2, heights = c(2,1)), width = 8, height= 8, dpi = 300)
 
 ### f3
 ### comparing technologies 
@@ -383,7 +362,7 @@ for(j in 1:4){
 }
 
 
-f1 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
                                         "EV (Seattle)", "HP (Seattle)"))) %>% 
@@ -464,7 +443,7 @@ for(j in 1:4){
 }
 
 
-f2 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, 
                        levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
@@ -567,7 +546,7 @@ for(j in 1:4){
 }
 
 
-f3 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
                                         "EV (Seattle)", "HP (Seattle)"))) %>% 
@@ -653,7 +632,7 @@ for(j in 1:4){
 }
 
 
-f4 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
                                         "EV (Seattle)", "HP (Seattle)"))) %>% 
@@ -742,7 +721,7 @@ for(j in 1:4){
 }
 
 
-f5 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, 
                        levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
@@ -857,7 +836,7 @@ for(j in 1:4){
 }
 
 
-f6 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
                                         "EV (Seattle)", "HP (Seattle)"))) %>% 
@@ -885,16 +864,6 @@ f6 <- TP %>%
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank())
 
-
-
-f <- ggarrange(f1,f2,f3,f4,f5,f6, ncol = 3, nrow = 2,
-                    labels = NULL,
-                    common.legend = T, legend = "bottom",
-                    align = "hv", 
-                    font.label = list(size = 10, color = "black", face = "bold", 
-                                      family = NULL, position = "top"))
-
-ggsave("./Fig/fp.png", f, width = 12, height= 8, dpi = 300)
 
 
 ### f4
@@ -1031,7 +1000,7 @@ To <- TP %>%
          year = substr(year, 3,4)) 
 
 
-fy <- To %>% 
+To %>% 
   mutate(norm = factor(norm, levels = c("Standardized","Original"))) %>% 
   
   ggplot() +
@@ -1072,43 +1041,22 @@ fy <- To %>%
 
 
 
-
-
 ### bass model 
-library(DIMORA) # for nlsLM function 
-adoption <- PV %>% 
-  group_by(Class, Year) %>% 
-  summarise(PV = n()) %>% 
-  left_join(EV %>% 
-              group_by(Class, Year) %>% 
-              summarise(EV = n()), by = c("Class", "Year")) %>% 
-  left_join(Pump %>% 
-              group_by(Class, Year) %>% 
-              summarise(Pump = n()), by = c("Class", "Year")) %>% 
-  gather(Technology, value, PV, EV, Pump) %>% 
-  mutate(Technology = parse_factor(Technology, levels = c("PV", "EV", "Pump"))) 
-
-
 data.pv <- PV %>% 
-  filter(Class == "Single family") %>% 
   group_by(Year) %>% 
   summarise(value = n())
 
 data.ev <- EV %>% 
-  filter(Class == "Single family") %>% 
   group_by(Year) %>% 
   summarise(value = n())
 
 data.pump <- Pump %>% 
-  filter(Class == "Single family") %>% 
   group_by(Year) %>% 
   summarise(value = n())
 
 data.VT <- VPV %>% 
   group_by(Year) %>% 
   summarise(value = n())
-
-
 
 
 # data: year, install; nqtrs: number of times
@@ -1138,7 +1086,7 @@ dff <- function(data, nqtrs){
 }
 
 
-bs <- data.VT %>% 
+data.VT %>% 
   mutate(bass = dff(data.VT, 20),
          tech = "PV (Vermont)") %>% 
   rbind(data.pv %>% 
@@ -1223,7 +1171,7 @@ diff <- function(data){
 }
 
 # m,p,q for the total adoption
-mpq.T <- rbind(diff(data.pv) %>% 
+rbind(diff(data.pv) %>% 
                  mutate(tech = "PV (Seattle)"),
                diff(data.ev) %>% 
                  mutate(tech = "EV (Seattle)"),
@@ -1257,12 +1205,6 @@ mpq.T <- rbind(diff(data.pv) %>%
         axis.ticks.x=element_blank())
 
   
-
-ggsave("./Fig/fy.png", ggarrange(bs, ggarrange(mpq.T, fy, nrow = 1, widths = c(0.8,1)),
-                                 nrow = 2, heights = c(0.8,1)), width = 11, height= 7, dpi = 300)
-
-
-
 ### f5
 ### comparing community
 # total count by tech
@@ -1301,7 +1243,6 @@ tech_num <- dfPV %>%
   dplyr::select(-count, -Unit) %>% 
   group_by(GEOID) %>% 
   summarize_all(sum, na.rm = T) 
-# mutate_at(c(4,5,6,7), ~replace_na(.,0))
 
 
 
@@ -1311,34 +1252,34 @@ tab_gen <- function(variable){
   num <- 3
   
   
-  seattle_tracts <- seattle_tracts %>%
+  SEA <- seattle_tracts %>%
     mutate_at(vars(HomeOwn,Income,Edu), funs(rescale(., to=c(0,1)))) %>% 
     mutate(ic = ifelse(get(variable) > quantile(get(variable), 0.8) , "H",
                        ifelse(get(variable) > quantile(get(variable), 0.2), "M","L")),
            ic = factor(ic, levels = lv)) 
   
-  temp <- temp %>%
+  VT <- temp %>%
     mutate_at(vars(HomeOwn,Income,Edu), funs(rescale(., to=c(0,1)))) %>% 
     mutate(ic = ifelse(get(variable) > quantile(get(variable), 0.8) , "H",
                        ifelse(get(variable) > quantile(get(variable), 0.2), "M","L")),
            ic = factor(ic, levels = lv)) 
   
   
-  fsv <- temp %>% 
+  fsv <- VT %>% 
     st_drop_geometry() %>% 
     left_join(tech_num %>% 
                 dplyr::select(GEOID,`PV (Vermont)`), by = "GEOID") %>% 
-    mutate_at(31, ~replace_na(.,0)) %>% 
+    mutate_at(7, ~replace_na(.,0)) %>% 
     
     group_by(ic) %>% 
     summarise(mean = mean(`PV (Vermont)`),
               sd = sd(`PV (Vermont)`)) %>%
     mutate(tech = "PV (Vermont)") %>% 
-    rbind(seattle_tracts %>% 
+    rbind(SEA %>% 
             st_drop_geometry() %>% 
             left_join(tech_num %>% 
                         dplyr::select(-`PV (Vermont)`), by = "GEOID") %>% 
-            mutate_at(15:17, ~replace_na(.,0)) %>% 
+            mutate_at(14:16, ~replace_na(.,0)) %>% 
             gather(tech, value, `EV (Seattle)`:`PV (Seattle)`) %>% 
             
             group_by(tech, ic) %>% 
@@ -1360,25 +1301,25 @@ tab_gen <- function(variable){
     if(j == 1){
       df <- dfPV %>% 
         filter(Dist < 300) %>% 
-        left_join(seattle_tracts %>% 
+        left_join(SEA %>% 
                     st_drop_geometry() %>% 
                     dplyr::select(GEOID, ic), by = "GEOID")
     }else if(j == 2){
       df <- dfEV %>% 
         filter(Dist < 300) %>% 
-        left_join(seattle_tracts %>% 
+        left_join(SEA %>% 
                     st_drop_geometry() %>% 
                     dplyr::select(GEOID, ic), by = "GEOID")
     }else if(j == 3){
       df <- dfPump %>% 
         filter(Dist < 300) %>% 
-        left_join(seattle_tracts %>% 
+        left_join(SEA %>% 
                     st_drop_geometry() %>% 
                     dplyr::select(GEOID, ic), by = "GEOID")
     }else{
       df <- dfVT %>% 
         filter(Dist < 300) %>% 
-        left_join(temp %>% 
+        left_join(VT %>% 
                     st_drop_geometry() %>% 
                     dplyr::select(GEOID, ic), by = "GEOID")
     }
@@ -1468,7 +1409,7 @@ tab_d <- function(){
     st_drop_geometry() %>% 
     left_join(tech_num %>% 
                 dplyr::select(GEOID,`PV (Vermont)`), by = "GEOID") %>% 
-    mutate_at(31, ~replace_na(.,0)) %>% 
+    mutate_at(7, ~replace_na(.,0)) %>% 
     
     group_by(DAC) %>% 
     summarise(mean = mean(`PV (Vermont)`),
@@ -1478,7 +1419,7 @@ tab_d <- function(){
             st_drop_geometry() %>% 
             left_join(tech_num %>% 
                         dplyr::select(-`PV (Vermont)`), by = "GEOID") %>% 
-            mutate_at(15:17, ~replace_na(.,0)) %>% 
+            mutate_at(14:16, ~replace_na(.,0)) %>% 
             gather(tech, value, `EV (Seattle)`:`PV (Seattle)`) %>% 
             
             group_by(tech, DAC) %>% 
@@ -1596,7 +1537,7 @@ TP2 <- TP %>%
 
 
 
-g1 <- TP2 %>% 
+TP2 %>% 
   filter(tech == "PV (Seattle)") %>% 
   ggplot() + 
   geom_col(aes(y = mean/5, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
@@ -1620,7 +1561,7 @@ g1 <- TP2 %>%
         axis.line.y = element_line(color="black"),
         axis.text.x=element_blank())
 
-g2 <- TP2 %>% 
+TP2 %>% 
   filter(tech == "PV (Vermont)") %>% 
   ggplot() + 
   geom_col(aes(y = mean/40, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
@@ -1644,7 +1585,7 @@ g2 <- TP2 %>%
         axis.text.x=element_blank(),
         strip.text.x = element_blank())
 
-g3 <- TP2 %>% 
+TP2 %>% 
   filter(tech == "EV (Seattle)") %>% 
   ggplot() + 
   geom_col(aes(y = mean*0.7, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
@@ -1668,7 +1609,7 @@ g3 <- TP2 %>%
         axis.text.x=element_blank(),
         strip.text.x = element_blank())
 
-g4 <- TP2 %>% 
+TP2 %>% 
   filter(tech == "HP (Seattle)") %>% 
   ggplot() + 
   geom_col(aes(y = mean/10, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
@@ -1694,27 +1635,8 @@ g4 <- TP2 %>%
 
 
 
-require(grid)   # for the textGrob() function
-figure <- ggarrange(g1 + rremove("ylab") + rremove("xlab"), 
-                    g2 + rremove("ylab") + rremove("xlab"), 
-                    g3 + rremove("ylab") + rremove("xlab"), 
-                    g4+ rremove("ylab") + rremove("xlab"), # remove axis labels from plots
-                    labels = NULL,
-                    ncol = 1, nrow = 4,
-                    common.legend = TRUE, legend = "bottom",
-                    align = "hv", 
-                    font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
-
-f5 <- annotate_figure(figure, 
-                      left = textGrob("Installed base coefficient (point)", rot = 90, vjust = 1, 
-                                              gp = gpar(cex = 1)),
-                      top = textGrob("a", x = 0.03),
-                      right = textGrob("Average rate (%) of installed housing buildings (bar)", rot = 270, vjust = 1, 
-                                       gp = gpar(cex = 1)))
-
-
 # DAC characteristics 
-f6 <- seattle_tracts %>% 
+seattle_tracts %>% 
   st_join(tr.sf %>% 
             rename(GEOID = FIPS) %>% 
             filter(STATE_FIPS == 53) %>%
@@ -1777,20 +1699,14 @@ f6 <- seattle_tracts %>%
         axis.line.x = element_line(color="black"),
         axis.line.y = element_line(color="black"),
         axis.text.x=element_blank())
-          
-ggsave("./Fig/fc.png", ggarrange(f5,f6, heights = c(2,1), nrow = 2),
-       width = 9, height= 8, dpi = 300)
-
 
 
 
 ### f6
 ### detailed mapping
-library(ggspatial) # for scale bar
-
 tr <- 53033010401
 
-syn <- s_house %>% 
+s_house %>% 
   ggplot() +
   geom_sf(fill = "gray50", color = NA) + # buildings
   geom_sf(data = seattle_tracts %>% # tract layers
@@ -1826,7 +1742,7 @@ t_d <- dfEV %>% # buffers
   na.omit()
 
 
-yes <- s_house %>% 
+s_house %>% 
   st_join(dfEV %>% # buildings
             st_transform(4269) %>% 
             filter(adopter == 1) %>%
@@ -1878,7 +1794,7 @@ tt_d <- dfEV %>% # buffers
   na.omit()
 
 
-no <- s_house %>% 
+s_house %>% 
   st_join(dfEV %>% # buildings
             st_transform(4269) %>% 
             filter(adopter == 0) %>% 
@@ -1916,16 +1832,10 @@ no <- s_house %>%
         panel.background = element_blank(),
         panel.grid.major = element_blank())
 
-
-
-
-fsm <- ggarrange(syn, ggarrange(yes, no, nrow = 2, heights = c(1.1,1)), nrow = 1)
-ggsave("./Fig/fsm.png", fsm, width = 7, height= 4.7, dpi = 300)
-
 # Vermont
 trv <- 5001715700
 
-vyn <- v_house %>% 
+v_house %>% 
   ggplot() +
   geom_sf(fill = "gray70", color = "gray70", size = 0.1) + # buildings
   geom_sf(data = temp %>% # tract layers
@@ -1964,7 +1874,7 @@ t_dv <- dfVT %>% # buffers
   filter(adopter.y == 1)
 
 
-v_yes <- v_house %>% 
+v_house %>% 
   
   st_join(dfVT %>% # buildings
             st_transform(4269) %>%
@@ -2010,20 +1920,6 @@ v_yes <- v_house %>%
 tt_dv <- dfVT %>% # buffers
   st_transform(4269) %>% 
   filter(adopter == 1) %>% 
-  st_centroid() %>% 
-  st_join(v_house %>% 
-            st_join(dfVT %>% # buildings
-                      st_transform(4269) %>% 
-                      filter(adopter == 0) %>%
-                      filter(GEOID == trv) %>% 
-                      filter(Year == 2014),  join = st_intersects) %>% 
-            filter(!is.na(GEOID)) %>% 
-            dplyr::select(adopter)) %>% 
-  na.omit()
-
-tt_dv <- dfVT %>% # buffers
-  st_transform(4269) %>% 
-  filter(adopter == 1) %>% 
   filter(Dist == 50) %>% 
   filter(Year == 2014) %>% 
   st_centroid() %>% 
@@ -2037,7 +1933,7 @@ tt_dv <- dfVT %>% # buffers
   filter(adopter.y == 0)
 
 
-v_no <- v_house %>% 
+v_house %>% 
   
   st_join(dfVT %>% # buildings
             st_transform(4269) %>% 
@@ -2079,10 +1975,19 @@ v_no <- v_house %>%
         panel.background = element_blank(),
         panel.grid.major = element_blank())
 
-fvm <- ggarrange(vyn, ggarrange(v_yes, v_no, nrow = 2), nrow = 1, widths = c(1,1))
-ggsave("./Fig/fvm.png", fvm, width = 7, height= 5.6, dpi = 300)
 
 ### f8
+# only for solar to see the difference by sampling 
+tfr <- d.200 %>% 
+  filter(sample == "random") %>% 
+  rename(Installed.Base = neighbor) %>% 
+  mutate_at(vars(PopDensity:Gini,Installed.Base,Year), funs(scale(.) %>% as.numeric()))
+
+tfg <- d.200 %>% 
+  filter(sample == "GEOID") %>% 
+  rename(Installed.Base = neighbor) %>% 
+  mutate_at(vars(PopDensity:Gini,Installed.Base,Year), funs(scale(.) %>% as.numeric()))
+
 nm <- names(tfr %>% 
               st_drop_geometry() %>% 
               dplyr::select(Installed.Base,Year,PopDensity:Gini))
@@ -2128,7 +2033,7 @@ for(i in 1:2){
   
 }
 
-smp <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(var = factor(var, levels = nm),
          model = factor(model, levels = md)) %>%
@@ -2153,7 +2058,7 @@ smp <- TP %>%
   theme(legend.position = "bottom")
 
 
-smp1 <- d.200 %>% 
+d.200 %>% 
   st_drop_geometry() %>% 
   filter(sample != "cluster") %>% 
   mutate(adopter = ifelse(adopter == 0, "N", "Y"),
@@ -2175,45 +2080,38 @@ smp1 <- d.200 %>%
   theme_classic() +
   theme(legend.position = "bottom")
 
-ggsave("./Fig/fsmp.png", ggarrange(smp, smp1, nrow = 2, heights = c(1,0.8)), 
-       width = 10, height= 8, dpi = 300)
-
-
 ### S1
 # point clustering analysis
 # Clark and Evans test aggregation index R
-as.ppp(PV[,c(6,7)], W= owin(c(min(PV$Lon), max(PV$Lon)), c(min(PV$Lat), max(PV$Lat)))) %>% 
+as.ppp(PV[,c(2,3)], W= owin(c(min(PV$Lon), max(PV$Lon)), c(min(PV$Lat), max(PV$Lat)))) %>% 
   clarkevans.test
 
-as.ppp(EV[,c(6,7)], W= owin(c(min(EV$Lon), max(EV$Lon)), c(min(EV$Lat), max(EV$Lat)))) %>% 
+as.ppp(EV[,c(2,3)], W= owin(c(min(EV$Lon), max(EV$Lon)), c(min(EV$Lat), max(EV$Lat)))) %>% 
   clarkevans.test
 
-as.ppp(Pump[,c(5,6)], W= owin(c(min(Pump$Lon), max(Pump$Lon)), c(min(Pump$Lat), max(Pump$Lat)))) %>% 
+as.ppp(Pump[,c(2,3)], W= owin(c(min(Pump$Lon), max(Pump$Lon)), c(min(Pump$Lat), max(Pump$Lat)))) %>% 
   clarkevans.test
 
-as.ppp(VPV[,c(4,3)], W= owin(c(min(VPV$Lon), max(VPV$Lon)), c(min(VPV$Lat), max(VPV$Lat)))) %>% 
+as.ppp(VPV[,c(2,3)], W= owin(c(min(VPV$Lon), max(VPV$Lon)), c(min(VPV$Lat), max(VPV$Lat)))) %>% 
   clarkevans.test
 
 # G estimates
-png(filename="./Fig/G.png", width = 1100, height = 400)
-par(mfrow=c(1,4))
-as.ppp(PV[,c(6,7)], W= owin(c(min(PV$Lon), max(PV$Lon)), c(min(PV$Lat), max(PV$Lat)))) %>%
+
+as.ppp(PV[,c(2,3)], W= owin(c(min(PV$Lon), max(PV$Lon)), c(min(PV$Lat), max(PV$Lat)))) %>%
   envelope(fun= Gest, nrank= 2, nsim= 99, verbose = F) %>% plot(main = "PV (Seattle)",ylab="", xlab="Distance (r)",
                                                                 cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
 
-as.ppp(VPV[,c(4,3)], W= owin(c(min(VPV$Lon), max(VPV$Lon)), c(min(VPV$Lat), max(VPV$Lat)))) %>%
+as.ppp(VPV[,c(2,3)], W= owin(c(min(VPV$Lon), max(VPV$Lon)), c(min(VPV$Lat), max(VPV$Lat)))) %>%
   envelope(fun= Gest, nrank= 2, nsim= 99, verbose = FALSE) %>% plot(main = "PV (Vermont)",ylab="", xlab="Distance (r)",
                                                                     cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
 
-as.ppp(EV[,c(6,7)], W= owin(c(min(EV$Lon), max(EV$Lon)), c(min(EV$Lat), max(EV$Lat)))) %>%
+as.ppp(EV[,c(2,3)], W= owin(c(min(EV$Lon), max(EV$Lon)), c(min(EV$Lat), max(EV$Lat)))) %>%
   envelope(fun= Gest, nrank= 2, nsim= 99, verbose = F) %>% plot(main = "EV (Seattle)",ylab="", xlab="Distance (r)",
                                                                 cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
 
-as.ppp(Pump[,c(5,6)], W= owin(c(min(Pump$Lon), max(Pump$Lon)), c(min(Pump$Lat), max(Pump$Lat)))) %>%
+as.ppp(Pump[,c(2,3)], W= owin(c(min(Pump$Lon), max(Pump$Lon)), c(min(Pump$Lat), max(Pump$Lat)))) %>%
   envelope(fun= Gest, nrank= 2, nsim= 99, verbose = F) %>% plot(main = "HP (Seattle)",ylab="", xlab="Distance (r)",
                                                                 cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
-dev.off()
-
 
 ### S2
 ### DAC 
@@ -2315,7 +2213,7 @@ jst <- data %>%
 
 
 # library(lemon)
-f1 <- jst %>% 
+jst %>% 
   mutate(type = factor(type, levels = g)) %>% 
   
   filter(class == "total") %>% 
@@ -2335,7 +2233,7 @@ f1 <- jst %>%
         strip.text.y = element_text(size = 6))
 
 # cols <- hue_pal()(3)
-f2 <- jst %>% 
+jst %>% 
   mutate(type = factor(type, levels = g)) %>% 
   filter(class != "total") %>% 
   ggplot() +
@@ -2349,13 +2247,6 @@ f2 <- jst %>%
   theme_classic() +
   theme(legend.position = "bottom",
         strip.text.y = element_text(size = 6))
-
-library(ggpubr)
-f12<- ggarrange(f1,f2, nrow = 2, heights = c(0.2,1))
-
-ggsave("./Fig/jst.png", f12, width = 10, height = 8, dpi=300)
-
-
 
 ### s3
 # by neighbor and Dist 
@@ -2416,7 +2307,7 @@ for(j in 1:4){
 
 
 # nei
-s3 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)",
                                         "EV (Seattle)", "HP (Seattle)"))) %>%
@@ -2438,73 +2329,6 @@ s3 <- TP %>%
     legend.position = "bottom",
     axis.line.x = element_line(color="black"),
     axis.line.y = element_line(color="black"))
-
-ggsave("./Fig/s3.png", s3, 
-       width = 10, height= 4, dpi = 300)
-
-
-# by neighbor and year 
-for(i in seq(2011,2019, by = 2)){
-  tf <- df[[1]] %>% 
-    filter(Year == i)
-  
-  fit <- glm(adopter ~ neighbor + Dist, family = "binomial", data = tf)
-  # summary(fit)
-  
-  
-  nei <- seq(0, 10, by = 1)
-  rad <- rep(250, length(nei))
-  cons <- rep(1, length(nei))
-  x <- cbind(cons, nei, rad)
-  
-  sims <- 1000
-  peGlm <- fit$coefficients
-  vcGlm <- vcov(fit)
-  simbetas <- mvrnorm(sims, peGlm, vcGlm)
-  xbeta <- x %*% t(simbetas)
-  inverse.logit <- function(xb){
-    1/(1+exp(-xb))
-  
-  prob <-
-    inverse.logit(xbeta)
-  
-  pe <- apply(prob, 1, mean)
-  upper <- apply(prob, 1, quantile, probs= 0.95)
-  lower <- apply(prob, 1, quantile, probs= 0.05)
-  
-  
-  tp <- cbind(x,pe,upper,lower) %>% 
-    as.data.frame() %>% 
-    mutate(year = i)
-  if(i == 2011){
-    TP <- tp 
-  }else{
-    TP <- rbind(tp,TP)
-  }
-  
-}
-
-
-# year
-TP %>%
-  as.data.frame() %>%
-  ggplot(aes(x = nei, y = pe, ymax = upper, ymin = lower, fill = factor(year))) +
-  geom_line(aes(color = factor(year))) +
-  geom_ribbon(alpha = 0.07, linetype = 0) +
-  labs(y = "Probability", x = "Number of neighbor installation", color = "Year", fill = "Year") +
-  scale_x_continuous(breaks = 0:10) +
-  annotate("text", x=0.35, y=0.5, label= "Dist = 250m",
-           hjust = 0) +
-  theme(
-    panel.background = element_rect(fill = NA),
-    axis.line.x.bottom = element_line(size = 0.5),
-    axis.ticks.length = unit(0.5, "char"),
-    legend.position = c(0.13,0.8),
-    axis.line.x = element_line(color="black"),
-    axis.line.y = element_line(color="black"))
-
-
-
 
 
 ### s4
@@ -2555,7 +2379,7 @@ for(j in 1:4){
   
 }
 
-s4 <- TP %>%
+TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, levels = tch)) %>% 
   ggplot(aes(x = Dist, y = pe)) +
@@ -2579,8 +2403,6 @@ s4 <- TP %>%
         axis.line.x = element_line(color="black"),
         axis.line.y = element_line(color="black"))
 
-ggsave("./Fig/s4.png", s4, 
-       width = 10, height= 8, dpi = 300)
 
 
 
@@ -2606,7 +2428,7 @@ mp_gen <- function(variable){
   
 }
 
-m1 <- mp_gen("HomeOwn")[[1]] %>% 
+mp_gen("HomeOwn")[[1]] %>% 
   ggplot() +
   geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
 
@@ -2623,7 +2445,7 @@ m1 <- mp_gen("HomeOwn")[[1]] %>%
         legend.position = "none")
 
 
-m2 <- mp_gen("Income")[[1]] %>% 
+mp_gen("Income")[[1]] %>% 
   ggplot() +
   geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
 
@@ -2640,7 +2462,7 @@ m2 <- mp_gen("Income")[[1]] %>%
         legend.position = "none")
 
 
-m3 <- mp_gen("Edu")[[1]] %>% 
+mp_gen("Edu")[[1]] %>% 
   ggplot() +
   geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
 
@@ -2657,7 +2479,7 @@ m3 <- mp_gen("Edu")[[1]] %>%
         legend.position = "none")
 
 
-m11 <- mp_gen("HomeOwn")[[2]] %>% 
+mp_gen("HomeOwn")[[2]] %>% 
   ggplot() +
   geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
 
@@ -2674,7 +2496,7 @@ m11 <- mp_gen("HomeOwn")[[2]] %>%
         legend.position = "none")
 
 
-m12 <- mp_gen("Income")[[2]] %>% 
+mp_gen("Income")[[2]] %>% 
   ggplot() +
   geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
 
@@ -2691,7 +2513,7 @@ m12 <- mp_gen("Income")[[2]] %>%
         legend.position = "none")
 
 
-m13<- mp_gen("Edu")[[2]] %>% 
+mp_gen("Edu")[[2]] %>% 
   ggplot() +
   geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
 
@@ -2707,11 +2529,6 @@ m13<- mp_gen("Edu")[[2]] %>%
         panel.grid.major = element_blank(),
         legend.position = "none")
 
-
-
-ggsave("./Fig/vul.png", ggarrange(m1,m2, m3, m11,m12,m13, nrow = 2, ncol = 3,
-                                  common.legend = TRUE, legend = "bottom"), 
-       width = 9, height= 7, dpi = 300)
 
 
 ### t1
@@ -2730,18 +2547,6 @@ temp %>%
 
 
 ### t3
-# only for solar to see the difference by sampling 
-tfr <- d.200 %>% 
-  filter(sample == "random") %>% 
-  rename(Installed.Base = neighbor) %>% 
-  mutate_at(vars(PopDensity:Gini,Installed.Base,Year), funs(scale(.) %>% as.numeric()))
-
-tfg <- d.200 %>% 
-  filter(sample == "GEOID") %>% 
-  rename(Installed.Base = neighbor) %>% 
-  mutate_at(vars(PopDensity:Gini,Installed.Base,Year), funs(scale(.) %>% as.numeric()))
-
-
 # regression
 
 fit <- glm(adopter ~ Year+Installed.Base+
