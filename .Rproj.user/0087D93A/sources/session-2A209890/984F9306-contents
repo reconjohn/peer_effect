@@ -1,0 +1,2773 @@
+source("./syntax/Lib.R")
+source("./syntax/Data.R")
+
+### f1 
+### installation trend
+ftr <- dfPV %>% 
+  mutate(Tech = "PV (Seattle)") %>% 
+  dplyr::select(-cluster) %>% 
+  rbind(dfEV %>% 
+          mutate(Tech = "EV (Seattle)")) %>% 
+  filter(adopter == 1) %>% 
+  dplyr::select(Year, Dist, Tech) %>% 
+  rbind(dfPump %>% 
+          filter(adopter == 1) %>% 
+          dplyr::select(Year, Dist) %>% 
+          mutate(Tech = "HP (Seattle)")) %>% 
+  st_drop_geometry() %>% 
+  rbind(dfVT %>% 
+          filter(adopter == 1) %>% 
+          dplyr::select(Year, Dist) %>% 
+          mutate(Tech = "PV (Vermont)") %>% 
+          st_drop_geometry()) %>% 
+  
+  filter(Dist == 50) %>% 
+  group_by(Tech, Year) %>% 
+  summarise(Count = n()) %>% 
+  mutate(Cum = cumsum(Count),
+         Tech = factor(Tech, levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", "HP (Seattle)")),
+         Year = as.character(Year),
+         Year = substr(Year, 3,4)) %>%
+  ggplot(aes(x = Year, y = Cum)) +
+  geom_col(aes(fill = "Cumulative")) +
+  geom_col(aes(x = Year, y = Count, fill = "Annex")) +
+  scale_fill_manual(values = c("Cumulative" = "gray40", "Annex" = "gray70")) +
+  labs(y = "Housing buildings with technology", fill = "",
+       title = "a") +
+  facet_wrap(~Tech, scale = "free", nrow = 1) +
+  theme_classic() + 
+  theme(legend.position = "bottom")
+
+
+### mapping
+# adding DAC category
+f_map <- function(data, boundary, fips, name){
+  
+  boundary <- boundary %>% 
+    st_join(tr.sf %>% 
+              rename(GEOID = FIPS) %>% 
+              filter(STATE_FIPS == fips) %>%
+              dplyr::select(GEOID) %>% 
+              left_join(DAC %>% 
+                          dplyr::select(GEOID, disadvantaged), by = "GEOID") %>% 
+              st_transform(st_crs(boundary)$epsg) %>% 
+              dplyr::select(-GEOID),join = st_intersects, largest = TRUE) %>% 
+    mutate(disadvantaged = factor(disadvantaged, levels = c(TRUE, FALSE))) 
+  
+  data %>% 
+    filter(Dist == 50) %>% 
+    filter(adopter == 1) %>% 
+    st_centroid() %>%
+    
+    ggplot() +
+    geom_sf(data = boundary, aes(fill = disadvantaged), color = "gray50", alpha = 0.5) + # border 
+    geom_sf(color = "black", alpha = 0.6, size = 0.01) +
+    
+    scale_fill_manual(values = c("red", "gray100")) +
+    
+    labs(fill = "Disadvantaged community", title = name) +
+    theme_minimal() +
+    theme(plot.title = element_text(size=10),        
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks = element_blank(),
+          rect = element_blank(),
+          panel.background = element_blank(),
+          panel.grid.major = element_blank(),
+          legend.position = "none")
+}
+
+spv <- f_map(dfPV, seattle_tracts, "53", "PV (Seattle)")
+sev <- f_map(dfEV, seattle_tracts, "53", "EV (Seattle)")
+shp <- f_map(dfPump, seattle_tracts, "53", "HP (Seattle)")
+vpv <- f_map(dfVT, temp, "50", "PV (Vermont)")
+
+fm <- ggarrange(spv,vpv,sev,shp,
+                labels = NULL,
+                ncol = 4, nrow = 1,
+                common.legend = TRUE, legend = "bottom",
+                align = "hv"
+                # font.label = list(size = 10, color = "black", face = "bold", 
+                #                   family = NULL, position = "top")
+)
+# 
+fm1 <- annotate_figure(fm, 
+                       top = textGrob("b", x = 0.08))
+
+ggsave("./Fig/fm.png", ggarrange(ftr, fm1, nrow = 2), width = 9, height= 7, dpi = 300)
+
+
+### f2 
+## gap analysis
+dd <- rbind(
+  rbind(
+    dfPV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 1) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Seattle)"),
+    
+    dfEV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 1) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "EV (Seattle)"),
+    
+    dfPump %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 1) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "HP (Seattle)"),
+    
+    dfVT %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 1) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Vermont)")
+  ) %>% 
+    mutate(adopter = "Y"),
+  rbind(
+    dfPV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 0) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Seattle)"),
+    
+    dfEV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 0) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "EV (Seattle)"),
+    
+    dfPump %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 0) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "HP (Seattle)"),
+    
+    dfVT %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 0) %>% 
+      group_by(Dist) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Vermont)")
+  ) %>% 
+    mutate(adopter = "N")
+) %>% 
+  filter(Dist < 1100) 
+
+
+fd <- dd %>% 
+  mutate(adopter = factor(adopter, levels = c("Y","N")),
+         tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+                                        "HP (Seattle)")),
+         Dist = Dist/100,
+         Dist = as.factor(Dist)) %>% 
+  
+  ggplot() +
+  geom_col(position = "dodge", aes(x = Dist, y = mean, fill = adopter)) +
+  scale_fill_manual(values = c("gray40", "gray70")) +
+  labs(y = "", fill = "Adopter",
+       x = "Distance (100m)", title = "a") +
+  facet_wrap(~tech, scale = "free", nrow = 1) +
+  theme_classic() + 
+  theme(legend.position = "none")
+
+
+dt <- rbind(
+  rbind(
+    dfPV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 1) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Seattle)"),
+    
+    dfEV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 1) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "EV (Seattle)"),
+    
+    dfPump %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 1) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "HP (Seattle)"),
+    
+    dfVT %>% 
+      st_drop_geometry() %>% 
+      filter(Dist < 1100) %>% 
+      filter(adopter == 1) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Vermont)")
+  ) %>% 
+    mutate(adopter = "Y"),
+  rbind(
+    dfPV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 0) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Seattle)"),
+    
+    dfEV %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 0) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "EV (Seattle)"),
+    
+    dfPump %>% 
+      st_drop_geometry() %>% 
+      filter(adopter == 0) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "HP (Seattle)"),
+    
+    dfVT %>% 
+      st_drop_geometry() %>% 
+      filter(Dist < 1100) %>% 
+      filter(adopter == 0) %>% 
+      group_by(Year) %>% 
+      summarise(mean = mean(neighbor)) %>% 
+      mutate(tech = "PV (Vermont)")
+  ) %>% 
+    mutate(adopter = "N")
+) 
+
+ft <- dt %>% 
+  mutate(adopter = factor(adopter, levels = c("Y","N")),
+         tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+                                        "HP (Seattle)")),
+         Year = as.character(Year),
+         Year = substr(Year, 3,4)) %>% 
+  ggplot() +
+  geom_col(position = "dodge", aes(x = Year, y = mean, fill = adopter)) +
+  scale_fill_manual(values = c("gray40", "gray70")) +
+  labs(y = "", fill = "Adopter",
+       x = "Year", title = "b") +
+  facet_wrap(~tech, scale = "free", nrow = 1) +
+  theme_classic() + 
+  theme(legend.position = "none")
+
+
+figure <- ggarrange(fd, ft,
+                    heights = c(1,1),
+                    labels = NULL,
+                    ncol = 1, nrow = 2,
+                    common.legend = TRUE, legend = "right",
+                    align = "hv", 
+                    font.label = list(size = 10, color = "black", face = "bold", 
+                                      family = NULL, position = "top"))
+
+f <- annotate_figure(figure, left = textGrob("Average neighboring installed housing buildings", rot = 90, vjust = 1, 
+                                              gp = gpar(cex = 1)))
+
+
+# density 
+# Seattle: 182758 units, 217.3 square km
+# Vermont: 346301 units, 24923.46 square km
+
+# find the average housing unit number per areas
+dst <- c(50,100,150,200,250,300,400,500,700,1000)
+s_t <- 182758
+v_t <- 346301
+ad <- c(3202, 725, 4599, 9740) # total adoption in order of PV,EV,HP, VPV
+ss <- s_t/217.3*pi*(dst/1000)^2
+vv <- v_t/24923.46*pi*(dst/1000)^2
+
+ad[1:3]/s_t
+ad[4]/v_t
+
+dff <- dd %>% 
+  pivot_wider(names_from = adopter, values_from = mean) %>% 
+  mutate(diff = Y - N) %>% 
+  mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+                                        "HP (Seattle)")),
+         Dist = Dist/100,
+         Dist = as.factor(Dist)) %>%
+  mutate(stand = c(rep(ss, 3), vv),
+         adpt = c(rep(ad[1:3]/s_t, each = length(dst)),rep(ad[4]/v_t, 10)),
+         s_diff = diff/ stand,
+         r_dff = s_diff/ adpt)
+
+
+ff <- dff %>% 
+  ggplot() + 
+  geom_col(position = "dodge", aes(y = diff, x = Dist), fill = "gray50") +
+  # geom_point(aes(y = r_dff, x = Dist), color = "red") +
+  geom_line(aes(y = log10(s_diff)/6+0.8, x = Dist, group = tech), color = "gray10", alpha = 0.4)+ 
+  geom_point(aes(y = log10(s_diff)/6+0.8, x = Dist)) +
+  labs(x = "Distance (100m)",
+       title = "c") +
+  
+  facet_wrap(~ tech, nrow = 1) +
+  scale_x_discrete(expand = c(0.1, 0)) +
+  scale_y_continuous(name = "Number difference between\nadopter vs. non-adopter (gray bar)",
+                     sec.axis = sec_axis(~10^((.-0.8)*6), 
+                                         breaks = trans_breaks("log10", function(x) 10^x),
+                                         labels = trans_format("log10", math_format(10^.x)),
+                                         name = "Number difference per\nunit building (black point)")) +
+  theme_classic()
+
+ggsave("./Fig/f1.png", 
+       ggarrange(f, ff, nrow = 2, heights = c(2,1)), width = 8, height= 8, dpi = 300)
+
+### f3
+### comparing technologies 
+# regardless of distance
+# non standardization
+ds <- 1000
+for(j in 1:4){
+  
+  if(j == 1){
+    df <- dfPV %>% 
+      filter(Dist <ds)
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV %>% 
+      filter(Dist <ds)
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump %>% 
+      filter(Dist <ds)
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT %>% 
+      filter(Dist <ds)
+    tc <- "PV (Vermont)"
+  }
+  
+  tf <- df %>% 
+    st_drop_geometry()
+  
+  
+  fit <- glmer(adopter ~ neighbor + (1| Year)+
+                 (1 |Dist), family = "binomial", data = tf)
+  
+  sims <- 1000
+  pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+  peGlm <- pe[1:2]
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+    as.data.frame()
+  
+  
+  nei <- simbetas$neighbor
+  
+  pe <- mean(nei)
+  upper <- quantile(nei, probs= 0.95) 
+  lower <- quantile(nei, probs= 0.05) 
+  
+  
+  tp <- cbind(pe,upper,lower) %>% 
+    as.data.frame() %>% 
+    mutate(tech = tc)
+  
+  if(j == 1){ #only for EV i should be 100
+    TP <- tp 
+  }else{
+    TP <- rbind(tp,TP)
+  }
+}
+
+
+f1 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
+                                        "EV (Seattle)", "HP (Seattle)"))) %>% 
+  
+  ggplot(aes(color=tech, y=pe, x=tech,ymin=lower, ymax=upper)) + 
+  
+  geom_errorbar(color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  geom_point(position = "dodge", size = 3, alpha = 0.9) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  
+  labs(title = "a", y = "Installed base coefficient", x = "", 
+       color = "", fill = "") +
+  
+  # coord_cartesian(ylim = c(0.99, 1.06)) +
+  theme_classic() + 
+  theme(legend.position = "",
+        plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+
+# no standardizing 
+for(j in 1:4){
+  
+  if(j == 1){
+    df <- dfPV
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT
+    tc <- "PV (Vermont)"
+  }
+  
+  for(i in c(50,100,150,200,250,300,400,500,700,1000)){
+    tf <- df %>% 
+      filter(Dist == i)
+  
+    
+    
+    fit <- glmer(adopter ~ neighbor + (1| Year), family = "binomial", data = tf)
+    
+    sims <- 1000
+    pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+    peGlm <- pe[1:2]
+    vcGlm <- vcov(fit)
+    simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+      as.data.frame()
+    
+    
+    nei <- simbetas$neighbor
+    
+    pe <- mean(nei) %>% exp()
+    upper <- quantile(nei, probs= 0.95)%>% exp()
+    lower <- quantile(nei, probs= 0.05)%>% exp()
+    
+    
+    tp <- cbind(pe,upper,lower) %>% 
+      as.data.frame() %>% 
+      mutate(rad = i,
+             tech = tc)
+    
+    if(i == 50 & j == 1){ #only for EV i should be 100
+      TP <- tp 
+    }else{
+      TP <- rbind(tp,TP)
+    }
+    
+  }
+  
+}
+
+
+f2 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, 
+                       levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+                                  "HP (Seattle)"))) %>% 
+  ggplot(aes(x = rad, y = pe)) +
+  geom_smooth(aes(color = tech),se=FALSE, linewidth = 0.5) +
+  
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_vline(xintercept  = 505.4,
+             linetype="dotdash", size=0.5) +
+
+  labs(title = "b", y = "Installed base odds ratios", x = "Distance (m)", fill = "", color = "") +
+  theme_classic() + 
+  theme(legend.position = "none",
+        plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"))
+
+ds <- 501
+for(j in 1:4){
+  
+  if(j == 1){
+    df <- dfPV %>% 
+      filter(Dist<ds)
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV %>% 
+      filter(Dist<ds)
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump %>% 
+      filter(Dist<ds)
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT %>% 
+      filter(Dist<ds)
+    tc <- "PV (Vermont)"
+  }
+  
+  tf <- df %>% 
+    st_drop_geometry() %>% 
+    mutate(Dist = factor(Dist))
+  
+  
+  fit <- glmer(adopter ~ neighbor + 
+                 (1 |Dist), family = "binomial", data = tf)
+  
+  
+  x <- 
+    tf %>%                    
+    dplyr::select(neighbor, Dist) %>% 
+    summarize_all(mean) %>%
+    uncount(36) %>% # summarize the means for most variables (can't average Species)         # repeat the row 10 times
+    mutate(neighbor = 0:35,
+           cont = 1,
+           Dist = 1
+    ) %>% 
+    relocate(cont)
+  
+  
+  x <- x %>% 
+    as.matrix()
+
+  
+  sims <- 1000
+  pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+  peGlm <- pe[1:2]
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+    as.data.frame() %>% 
+    mutate(Dist = ranef(fit)$Dist[[1]][8]) 
+
+  
+  
+  xbeta <- x %>% 
+    as.matrix()%*% t(simbetas)
+  
+  inverse.logit <- function(xb){
+    1/(1+exp(-xb))
+  }
+  
+  prob <-
+    inverse.logit(xbeta)
+  pe <- apply(prob, 1, mean)
+  upper <- apply(prob, 1, quantile, probs= 0.95)
+  lower <- apply(prob, 1, quantile, probs= 0.05)
+  
+  
+  tp <- cbind(pe,upper,lower) %>% 
+    as.data.frame() %>% 
+    mutate(neighbor = 0:35,
+           tech = tc)
+  
+  if(j == 1){ #only for EV i should be 100
+    TP <- tp 
+  }else{
+    TP <- rbind(tp,TP)
+  }
+}
+
+
+f3 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
+                                        "EV (Seattle)", "HP (Seattle)"))) %>% 
+  mutate_at(vars(pe,upper,lower), funs(.*100-50)) %>% 
+  
+  ggplot(aes(x = neighbor, y = pe, ymax = upper, ymin = lower, colour = tech, fill = tech)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.1, linetype = 0) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+
+  labs(y = "Probability of adoption\nrelative to non-adopters (%)", 
+       x = "Number of neighbor installations within 500m",
+       fill = "",
+       color = "",
+       title = "c") +
+  theme_classic() +
+  theme(legend.position = "none")
+
+
+
+# standardization
+ds <- 1000
+for(j in 1:4){
+  
+  if(j == 1){
+    df <- dfPV %>% 
+      filter(Dist <ds)
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV %>% 
+      filter(Dist <ds)
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump %>% 
+      filter(Dist <ds)
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT %>% 
+      filter(Dist <ds)
+    tc <- "PV (Vermont)"
+  }
+  
+  tf <- df 
+  
+  if(sum(tf$neighbor) < 2){ # if the number of neighbor is less than 2, then the estimation is spurious.
+    next
+    
+  }else{
+
+    tf <- tf %>%
+    mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric()))
+  }
+  
+  
+  fit <- glmer(adopter ~ neighbor + (1| Year)+
+                 (1 |Dist), family = "binomial", data = tf)
+  
+  
+  sims <- 1000
+  pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+  peGlm <- pe[1:2]
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+    as.data.frame()
+  
+  
+  nei <- simbetas$neighbor
+  
+  pe <- mean(nei)
+  upper <- quantile(nei, probs= 0.95) 
+  lower <- quantile(nei, probs= 0.05) 
+  
+  
+  tp <- cbind(pe,upper,lower) %>% 
+    as.data.frame() %>% 
+    mutate(tech = tc)
+  
+  if(j == 1){ #only for EV i should be 100
+    TP <- tp 
+  }else{
+    TP <- rbind(tp,TP)
+  }
+}
+
+
+f4 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
+                                        "EV (Seattle)", "HP (Seattle)"))) %>% 
+  
+  
+  ggplot(aes(color=tech, y=pe, x=tech,ymin=lower, ymax=upper)) + 
+  
+  geom_errorbar(color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  geom_point(position = "dodge", size = 3, alpha = 0.9) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  
+  labs(title = "d", y = "Installed base coefficient (standardized)", x = "", 
+       color = "", fill = "") +
+  
+  theme_classic() + 
+  theme(legend.position = "none",
+        plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+# standardizing each loop of tech and distance
+for(j in 1:4){
+  
+  if(j == 1){
+    df <- dfPV
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT
+    tc <- "PV (Vermont)"
+  }
+  
+  for(i in c(50,100,150,200,250,300,400,500,700,1000)){
+    tf <- df %>% 
+      filter(Dist == i)
+    
+    if(sum(tf$neighbor) < 2){ # if the number of neighbor is less than 2, then the estimation is spurious. 
+      next
+      
+    }else{
+      tf <- tf %>% 
+        # mutate_at(vars(neighbor), funs(rescale(., to=c(0,1)))) 
+        mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric()))
+    }
+  
+    
+    fit <- glmer(adopter ~ neighbor + (1| Year), family = "binomial", data = tf)
+    
+    
+    sims <- 1000
+    pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+    peGlm <- pe[1:2]
+    vcGlm <- vcov(fit)
+    simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+      as.data.frame()
+    
+    
+    nei <- simbetas$neighbor
+    
+    pe <- mean(nei)%>% exp()
+    upper <- quantile(nei, probs= 0.95) %>% exp()
+    lower <- quantile(nei, probs= 0.05) %>% exp()
+    
+    
+    tp <- cbind(pe,upper,lower) %>% 
+      as.data.frame() %>% 
+      mutate(rad = i,
+             tech = tc)
+    
+    if(i == 50 & j == 1){ #only for EV i should be 100
+      TP <- tp 
+    }else{
+      TP <- rbind(tp,TP)
+    }
+    
+  }
+  
+}
+
+
+f5 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, 
+                       levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+                                  "HP (Seattle)"))) %>% 
+  ggplot(aes(x = rad, y = pe)) +
+  geom_smooth(aes(color = tech),se=FALSE, alpha = 0.1, linewidth = 0.5) +
+  
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_vline(xintercept  = c(505.4),
+             linetype="dotdash", size=0.5) +
+
+  labs(title = "e", y = "Installed base odd ratios (standardized)", x = "Distance (m)", fill = "", color = "") +
+  theme_classic() + 
+  theme(legend.position = "none",
+        plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"))
+
+
+ds <- 501
+for(j in 1:4){
+  
+  if(j == 1){
+    df <- dfPV %>% 
+      filter(Dist<ds) 
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV %>% 
+      filter(Dist<ds)
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump %>% 
+      filter(Dist<ds)
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT %>% 
+      filter(Dist<ds)
+    tc <- "PV (Vermont)"
+  }
+  
+  tf <- df %>% 
+    st_drop_geometry()
+  
+  if(sum(tf$neighbor) < 2){ # if the number of neighbor is less than 2, then the estimation is spurious.
+    next
+    
+  }else{
+    tf <- tf %>%
+      mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric()))
+  }
+  
+  
+  fit <- glmer(adopter ~ neighbor +
+                 (1 |Dist), family = "binomial", data = tf)
+  
+  
+  x <- 
+    tf %>%                    
+    dplyr::select(neighbor, Dist) %>% 
+    summarize_all(mean) %>%
+    uncount(2) %>% # summarize the means for most variables (can't average Species)         # repeat the row 10 times
+    mutate(neighbor = c(0,1),
+           cont = 1,
+           Dist = 1
+    ) %>% 
+    relocate(cont)
+  
+  
+  x <- x %>% 
+    as.matrix()
+  
+  
+  sims <- 1000
+  pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+  peGlm <- pe[1:2]
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+    as.data.frame() %>% 
+    mutate(Dist = ranef(fit)$Dist[[1]][8]) 
+  
+  
+  
+  xbeta <- x %>% 
+    as.matrix()%*% t(simbetas)
+  
+  inverse.logit <- function(xb){
+    1/(1+exp(-xb))
+  }
+  
+  prob <-
+    inverse.logit(xbeta)
+  
+  prof <- prob[2,] - prob[1,]
+  prof <- as.data.frame(prof) %>% 
+    t()
+  
+  pe <- apply(prof, 1, mean)
+  upper <- apply(prof, 1, quantile, probs= 0.95)
+  lower <- apply(prof, 1, quantile, probs= 0.05)
+  
+  
+  tp <- cbind(pe,upper,lower) %>% 
+    as.data.frame() %>% 
+    mutate(tech = tc)
+  
+  if(j == 1){ #only for EV i should be 100
+    TP <- tp 
+  }else{
+    TP <- rbind(tp,TP)
+  }
+}
+
+
+f6 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
+                                        "EV (Seattle)", "HP (Seattle)"))) %>% 
+  mutate_at(vars(pe, upper, lower), funs(.*100)) %>% 
+  
+  ggplot() +
+  geom_errorbar(aes(x=tech, ymin=lower, ymax=upper), 
+                color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  geom_point(aes(y = pe, x = tech, color = tech), position = "dodge", size = 3, alpha = 0.9) +
+  
+  
+  labs(x = "", fill = "", y = "Standardized value\n",
+       title = "f") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(y = "Impact of one sd of neighbor installation\nincrease on adoption probability (%)", 
+       x = "",
+       fill = "",
+       color = "") +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+
+
+f <- ggarrange(f1,f2,f3,f4,f5,f6, ncol = 3, nrow = 2,
+                    labels = NULL,
+                    common.legend = T, legend = "bottom",
+                    align = "hv", 
+                    font.label = list(size = 10, color = "black", face = "bold", 
+                                      family = NULL, position = "top"))
+
+ggsave("./Fig/fp.png", f, width = 12, height= 8, dpi = 300)
+
+
+### f4
+for(j in 1:4){
+
+  if(j == 1){
+    df <- dfPV 
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT %>%
+      filter(Dist < 1200)
+    tc <- "PV (Vermont)"
+  }
+
+  for(i in 2013:2019){
+
+    tf <- df %>%
+      filter(Year == i)
+
+    if(sum(tf$neighbor) < 2){ # if the number of neighbor is less than 2, then the estimation is spurious.
+      next
+
+    }else{
+      tf <- tf %>%
+        mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric()))
+    }
+    
+    
+    fit <- glmer(adopter ~ neighbor + (1| Dist), family = "binomial", data = tf)
+    
+    sims <- 1000
+    pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+    peGlm <- pe[1:2]
+    vcGlm <- vcov(fit)
+    simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+      as.data.frame()
+
+
+    nei <- simbetas$neighbor
+
+    pe <- mean(nei)
+    upper <- quantile(nei, probs= 0.95) 
+    lower <- quantile(nei, probs= 0.05) 
+
+
+    tp <- cbind(pe,upper,lower) %>%
+      as.data.frame() %>%
+      mutate(year = i,
+             tech = tc)
+
+    if(j == 1 & i == 2013){ #only for EV i should be 100
+      TP <- tp
+    }else{
+      TP <- rbind(tp,TP)
+    }
+
+
+  }
+
+}
+
+
+# non-normalization
+for(j in 1:4){
+  
+  if(j == 1){
+    df <- dfPV 
+    tc <- "PV (Seattle)"
+  }else if(j == 2){
+    df <- dfEV
+    tc <- "EV (Seattle)"
+  }else if(j == 3){
+    df <- dfPump
+    tc <- "HP (Seattle)"
+  }else{
+    df <- dfVT %>%
+      filter(Dist < 1200)
+    tc <- "PV (Vermont)"
+  }
+  
+  for(i in 2013:2019){
+    
+    tf <- df %>%
+      filter(Year == i)
+
+    
+    fit <- glmer(adopter ~ neighbor + (1| Dist), family = "binomial", data = tf)
+    
+    sims <- 1000
+    pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+    peGlm <- pe[1:2]
+    vcGlm <- vcov(fit)
+    simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+      as.data.frame()
+    
+    nei <- simbetas$neighbor
+    
+    pe <- mean(nei)
+    upper <- quantile(nei, probs= 0.95) 
+    lower <- quantile(nei, probs= 0.05) 
+    
+    
+    tp <- cbind(pe,upper,lower) %>%
+      as.data.frame() %>%
+      mutate(year = i,
+             tech = tc)
+    
+    if(j == 1 & i == 2013){ #only for EV i should be 100
+      TPn <- tp
+    }else{
+      TPn <- rbind(tp,TPn)
+    }
+    
+    
+  }
+  
+}
+
+To <- TP %>%
+  mutate(norm = "Standardized") %>% 
+  rbind(TPn %>% 
+          mutate(norm = "Original")) %>% 
+  as.data.frame() %>%
+  mutate(tech = factor(tech,
+                       levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)",
+                                  "HP (Seattle)")),
+         year = as.character(year),
+         year = substr(year, 3,4)) 
+
+
+fy <- To %>% 
+  mutate(norm = factor(norm, levels = c("Standardized","Original"))) %>% 
+  
+  ggplot() +
+  geom_point(aes(x = year, y = pe), size = 2) +
+  geom_errorbar(aes(x = year, ymin=lower, ymax=upper), color = "gray50", width=0.1, alpha=0.9, size=0.7) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+
+  geom_hline(data = To %>% filter(tech == "PV (Seattle)") %>% 
+               filter(norm == "Original"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+  geom_hline(data = To %>% filter(tech == "PV (Vermont)")%>% 
+               filter(norm == "Original"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+  geom_hline(data = To %>% filter(tech == "EV (Seattle)")%>% 
+               filter(norm == "Original"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+  geom_hline(data = To %>% filter(tech == "HP (Seattle)")%>% 
+               filter(norm == "Original"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+  
+  geom_hline(data = To %>% filter(tech == "PV (Seattle)") %>% 
+               filter(norm == "Standardized"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+  geom_hline(data = To %>% filter(tech == "PV (Vermont)")%>% 
+               filter(norm == "Standardized"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+  geom_hline(data = To %>% filter(tech == "EV (Seattle)")%>% 
+               filter(norm == "Standardized"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+  geom_hline(data = To %>% filter(tech == "HP (Seattle)")%>% 
+               filter(norm == "Standardized"), aes(yintercept  = mean(pe)),
+             linetype="solid", color = "red", size=0.3, alpha = 0.4) +
+
+  labs(title = "c", y = "Installed base coefficient", x = "Year", fill = "", color = "") +
+  facet_grid(norm~tech, scale = "free", switch = "y") +
+  scale_x_discrete(expand = c(0.2, 0)) +
+  theme_classic() 
+
+
+
+
+
+### bass model 
+library(DIMORA) # for nlsLM function 
+adoption <- PV %>% 
+  group_by(Class, Year) %>% 
+  summarise(PV = n()) %>% 
+  left_join(EV %>% 
+              group_by(Class, Year) %>% 
+              summarise(EV = n()), by = c("Class", "Year")) %>% 
+  left_join(Pump %>% 
+              group_by(Class, Year) %>% 
+              summarise(Pump = n()), by = c("Class", "Year")) %>% 
+  gather(Technology, value, PV, EV, Pump) %>% 
+  mutate(Technology = parse_factor(Technology, levels = c("PV", "EV", "Pump"))) 
+
+
+data.pv <- PV %>% 
+  filter(Class == "Single family") %>% 
+  group_by(Year) %>% 
+  summarise(value = n())
+
+data.ev <- EV %>% 
+  filter(Class == "Single family") %>% 
+  group_by(Year) %>% 
+  summarise(value = n())
+
+data.pump <- Pump %>% 
+  filter(Class == "Single family") %>% 
+  group_by(Year) %>% 
+  summarise(value = n())
+
+data.VT <- VPV %>% 
+  group_by(Year) %>% 
+  summarise(value = n())
+
+
+
+
+# data: year, install; nqtrs: number of times
+dff <- function(data, nqtrs){
+  Sales <- data$value
+  T <- 1:length(Sales)
+  
+  fit<-nlsLM(Sales ~ M*(((P+Q)^2/P)*exp(-(P+Q)*T))/
+               (1+(Q/P)*exp(-(P+Q)*T))^2,
+             # add P and Q below
+             start=c(list(M=sum(Sales),P=0.08,Q=0.2)))
+  
+  r <- summary(fit)$coefficient[,1] 
+  
+  m <- r[[1]]
+  p <- r[[2]]
+  q <- r[[3]]
+  
+  t=seq(0,nqtrs)
+  
+  
+  FF = expression(p*(exp((p+q)*t)-1)/(p*exp((p+q)*t)+q))
+  ff = D(FF,"t")
+  
+  new <- eval(ff)*m
+  return(new)
+}
+
+
+bs <- data.VT %>% 
+  mutate(bass = dff(data.VT, 20),
+         tech = "PV (Vermont)") %>% 
+  rbind(data.pv %>% 
+          mutate(bass = dff(data.pv, 16),
+                 tech = "PV (Seattle)"),
+        data.ev %>% 
+          mutate(bass = dff(data.ev, 9),
+                 tech = "EV (Seattle)"),
+        data.pump %>% 
+          mutate(bass = dff(data.pump, 16),
+                 tech = "HP (Seattle)")) %>% 
+  rename(Bass = bass,
+         Adoption = value) %>% 
+  filter(Year > 2007) %>% 
+  # mutate(Year = substr(Year, 3,4)) %>% 
+  mutate(Year = as.character(Year),
+         Year = substr(Year, 3,4)) %>%
+  rename(Installation = Adoption) %>% 
+
+  gather(key, value, Installation:Bass) %>% 
+  mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+                                        "HP (Seattle)")),
+         key = factor(key, levels = c("Installation","Bass"))) %>%
+  
+  ggplot(aes(x = Year, y = value,lty = key, color = key, group = key)) +
+  geom_line() +
+  scale_color_manual(values = c("black","red")) +
+  
+  scale_linetype_manual(values = c(1,5)) +
+
+  facet_wrap(~tech, scale = "free", nrow = 1) +
+  labs(y = "Annual installation", x = "Year", color = "", lty = "",
+       title = "a") +
+  theme_classic() +
+  theme(
+    axis.line.x = element_line(color="black"),
+    axis.line.y = element_line(color="black"),
+    legend.position = c(0.95,0.3))
+
+
+
+# giving m,p, and q
+diff <- function(data){
+
+  
+  Sales <- data$value
+  T <- 1:length(Sales)
+  
+  fit<-nlsLM(Sales ~ M*(((P+Q)^2/P)*exp(-(P+Q)*T))/
+               (1+(Q/P)*exp(-(P+Q)*T))^2,
+             start=c(list(M=sum(Sales),P=0.08,Q=0.2)))
+  
+  sims <- 1000
+  peGlm <- summary(fit)$coefficient[,1] 
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+    as.data.frame()
+  
+  var = c("M","P","Q")
+  for(i in 1:3){
+    
+    nei <- simbetas[[i]]
+    
+    
+    pe <- mean(nei)
+    upper <- quantile(nei, probs= 0.95) 
+    lower <- quantile(nei, probs= 0.05) 
+    
+    tp <- cbind(pe,upper,lower) %>% 
+      as.data.frame() %>% 
+      mutate(var = var[i])
+    
+    if(i == 1){
+      TP <- tp 
+    }else{
+      TP <- rbind(tp,TP)
+    }
+    
+  }
+  
+  return(TP)
+}
+
+# m,p,q for the total adoption
+mpq.T <- rbind(diff(data.pv) %>% 
+                 mutate(tech = "PV (Seattle)"),
+               diff(data.ev) %>% 
+                 mutate(tech = "EV (Seattle)"),
+               diff(data.pump) %>% 
+                 mutate(tech = "HP (Seattle)"),
+               diff(data.VT) %>% 
+                 mutate(tech = "PV (Vermont)")) %>% 
+  as.data.frame() %>% 
+  mutate(var = ifelse(var == "M", "Market potential (m)", 
+                      ifelse(var == "P", "Innovation (p)","Imitation (q)")),
+         var = factor(var, levels = c("Market potential (m)","Innovation (p)",
+                                      "Imitation (q)"))) %>% 
+  mutate(tech = factor(tech, levels = c("PV (Seattle)","PV (Vermont)", 
+                                        "EV (Seattle)","HP (Seattle)"))) %>% 
+  filter(var == "Imitation (q)") %>% 
+  
+  ggplot(aes(color=tech, y=pe, x=tech,ymin=lower, ymax=upper)) + 
+  
+  geom_errorbar(color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  geom_point(position = "dodge", size = 3, alpha = 0.9) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  
+  
+  
+  labs(x = "", y = "Bass imitation (q) coefficient",color = "",title = "b") +
+  theme_classic() +
+  theme(axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        legend.position = "bottom",
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+  
+
+ggsave("./Fig/fy.png", ggarrange(bs, ggarrange(mpq.T, fy, nrow = 1, widths = c(0.8,1)),
+                                 nrow = 2, heights = c(0.8,1)), width = 11, height= 7, dpi = 300)
+
+
+
+### f5
+### comparing community
+# total count by tech
+tech_num <- dfPV %>% 
+  filter(adopter == 1) %>% 
+  filter(Dist == 50) %>% 
+  dplyr::select(GEOID, Unit) %>% 
+  mutate(tech = "PV (Seattle)") %>% 
+  rbind(
+    dfEV %>% 
+      filter(adopter == 1) %>% 
+      filter(Dist == 50) %>% 
+      dplyr::select(GEOID, Unit) %>% 
+      mutate(tech = "EV (Seattle)")
+  ) %>% 
+  rbind(
+    dfPump %>% 
+      filter(adopter == 1) %>% 
+      filter(Dist == 50) %>% 
+      dplyr::select(GEOID, Unit) %>% 
+      mutate(tech = "HP (Seattle)")
+  ) %>% 
+  st_drop_geometry() %>% 
+  rbind(
+    dfVT %>% 
+      filter(adopter == 1) %>% 
+      filter(Dist == 50) %>% 
+      dplyr::select(GEOID, Unit) %>% 
+      mutate(tech = "PV (Vermont)") %>% 
+      st_drop_geometry()) %>% 
+  group_by(GEOID, tech) %>% 
+  summarise(count = n(),
+            Unit = mean(Unit),
+            rate = count/Unit) %>% 
+  pivot_wider(names_from = tech, values_from = rate) %>% 
+  dplyr::select(-count, -Unit) %>% 
+  group_by(GEOID) %>% 
+  summarize_all(sum, na.rm = T) 
+# mutate_at(c(4,5,6,7), ~replace_na(.,0))
+
+
+
+
+tab_gen <- function(variable){
+  lv <- c("L","M","H")
+  num <- 3
+  
+  
+  seattle_tracts <- seattle_tracts %>%
+    mutate_at(vars(HomeOwn,Income,Edu), funs(rescale(., to=c(0,1)))) %>% 
+    mutate(ic = ifelse(get(variable) > quantile(get(variable), 0.8) , "H",
+                       ifelse(get(variable) > quantile(get(variable), 0.2), "M","L")),
+           ic = factor(ic, levels = lv)) 
+  
+  temp <- temp %>%
+    mutate_at(vars(HomeOwn,Income,Edu), funs(rescale(., to=c(0,1)))) %>% 
+    mutate(ic = ifelse(get(variable) > quantile(get(variable), 0.8) , "H",
+                       ifelse(get(variable) > quantile(get(variable), 0.2), "M","L")),
+           ic = factor(ic, levels = lv)) 
+  
+  
+  fsv <- temp %>% 
+    st_drop_geometry() %>% 
+    left_join(tech_num %>% 
+                dplyr::select(GEOID,`PV (Vermont)`), by = "GEOID") %>% 
+    mutate_at(31, ~replace_na(.,0)) %>% 
+    
+    group_by(ic) %>% 
+    summarise(mean = mean(`PV (Vermont)`),
+              sd = sd(`PV (Vermont)`)) %>%
+    mutate(tech = "PV (Vermont)") %>% 
+    rbind(seattle_tracts %>% 
+            st_drop_geometry() %>% 
+            left_join(tech_num %>% 
+                        dplyr::select(-`PV (Vermont)`), by = "GEOID") %>% 
+            mutate_at(15:17, ~replace_na(.,0)) %>% 
+            gather(tech, value, `EV (Seattle)`:`PV (Seattle)`) %>% 
+            
+            group_by(tech, ic) %>% 
+            summarise(mean = mean(value),
+                      sd = sd(value)) %>% 
+            dplyr::select(ic, mean, sd, tech)) %>% 
+    mutate(tech = factor(tech, levels = c("PV (Seattle)","PV (Vermont)",
+                                          "EV (Seattle)","HP (Seattle)")),
+           var = variable)
+  
+  
+  # box plot 
+  ### income and built environment 
+  
+  tc <- c("PV (Seattle)", "EV (Seattle)", "HP (Seattle)", "PV (Vermont)")
+  
+  for(j in 1:4){
+    
+    if(j == 1){
+      df <- dfPV %>% 
+        filter(Dist < 300) %>% 
+        left_join(seattle_tracts %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, ic), by = "GEOID")
+    }else if(j == 2){
+      df <- dfEV %>% 
+        filter(Dist < 300) %>% 
+        left_join(seattle_tracts %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, ic), by = "GEOID")
+    }else if(j == 3){
+      df <- dfPump %>% 
+        filter(Dist < 300) %>% 
+        left_join(seattle_tracts %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, ic), by = "GEOID")
+    }else{
+      df <- dfVT %>% 
+        filter(Dist < 300) %>% 
+        left_join(temp %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, ic), by = "GEOID")
+    }
+    
+    
+    for(k in 1:num){
+      
+      tf <- df %>% 
+        filter(ic == lv[k])
+      
+      if(sum(tf$neighbor) < 2){ # if the number of neighbor is less than 2, then the estimation is spurious.
+        next
+        
+      }else{
+        tf <- tf %>%
+          mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric()))
+      }
+      
+      fit <- glm(adopter ~ neighbor + factor(Year) + factor(Dist), family = "binomial", data = tf)
+      # summary(fit)
+      
+      sims <- 1000
+      peGlm <- fit$coefficients
+      vcGlm <- vcov(fit)
+      simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+        as.data.frame()
+      
+      
+      nei <- simbetas$neighbor
+      
+      pe <- mean(nei)
+      upper <- quantile(nei, probs= 0.95) 
+      lower <- quantile(nei, probs= 0.05)
+      
+      
+      tp <- cbind(pe,upper,lower) %>% 
+        as.data.frame() %>% 
+        mutate(cluster = lv[k],
+               tech = tc[j],
+               var = variable)
+      
+      if(j == 1 & k == 1){ 
+        TP <- tp 
+      }else{
+        TP <- rbind(tp,TP)
+      }
+      
+    }
+    
+  }
+  
+  return(list(TP, fsv))
+}
+
+
+tab_d <- function(){
+  lv <- c(TRUE,FALSE)
+  num <- 2
+  
+  seattle_tracts <- seattle_tracts %>% 
+    st_join(tr.sf %>% 
+              rename(GEOID = FIPS) %>% 
+              filter(STATE_FIPS == 53) %>%
+              dplyr::select(GEOID) %>% 
+              left_join(DAC %>% 
+                          rename(DAC = disadvantaged) %>% 
+                          dplyr::select(GEOID, DAC), by = "GEOID") %>% 
+              st_transform(st_crs(seattle_tracts)$epsg) %>% 
+              dplyr::select(-GEOID),join = st_intersects, largest = TRUE) %>% 
+    mutate(DAC = factor(DAC, levels = c(TRUE, FALSE))) 
+  
+  
+  temp <- temp %>% 
+    st_join(tr.sf %>% 
+              rename(GEOID = FIPS) %>% 
+              filter(STATE_FIPS == 50) %>%
+              dplyr::select(GEOID) %>% 
+              left_join(DAC %>% 
+                          rename(DAC = disadvantaged) %>% 
+                          dplyr::select(GEOID, DAC), by = "GEOID") %>% 
+              st_transform(st_crs(temp)$epsg) %>% 
+              dplyr::select(-GEOID),join = st_intersects, largest = TRUE) %>% 
+    mutate(DAC = factor(DAC, levels = c(TRUE, FALSE))) 
+  
+  
+  fsv <- temp %>% 
+    st_drop_geometry() %>% 
+    left_join(tech_num %>% 
+                dplyr::select(GEOID,`PV (Vermont)`), by = "GEOID") %>% 
+    mutate_at(31, ~replace_na(.,0)) %>% 
+    
+    group_by(DAC) %>% 
+    summarise(mean = mean(`PV (Vermont)`),
+              sd = sd(`PV (Vermont)`)) %>%
+    mutate(tech = "PV (Vermont)") %>% 
+    rbind(seattle_tracts %>% 
+            st_drop_geometry() %>% 
+            left_join(tech_num %>% 
+                        dplyr::select(-`PV (Vermont)`), by = "GEOID") %>% 
+            mutate_at(15:17, ~replace_na(.,0)) %>% 
+            gather(tech, value, `EV (Seattle)`:`PV (Seattle)`) %>% 
+            
+            group_by(tech, DAC) %>% 
+            summarise(mean = mean(value),
+                      sd = sd(value)) %>% 
+            dplyr::select(DAC, mean, sd, tech)) %>% 
+    mutate(tech = factor(tech, levels = c("PV (Seattle)","PV (Vermont)",
+                                          "EV (Seattle)","HP (Seattle)")),
+           var = "DAC")
+
+  
+  tc <- c("PV (Seattle)", "EV (Seattle)", "HP (Seattle)", "PV (Vermont)")
+  
+  for(j in 1:4){
+    
+    if(j == 1){
+      df <- dfPV %>% 
+        filter(Dist < 400) %>% 
+        left_join(seattle_tracts %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, DAC), by = "GEOID")
+    }else if(j == 2){
+      df <- dfEV %>% 
+        filter(Dist < 400) %>% 
+        left_join(seattle_tracts %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, DAC), by = "GEOID")
+    }else if(j == 3){
+      df <- dfPump %>% 
+        filter(Dist < 400) %>% 
+        left_join(seattle_tracts %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, DAC), by = "GEOID")
+    }else{
+      df <- dfVT %>% 
+        filter(Dist < 400) %>% 
+        left_join(temp %>% 
+                    st_drop_geometry() %>% 
+                    dplyr::select(GEOID, DAC), by = "GEOID")
+    }
+    
+    
+    for(k in 1:num){
+      
+      tf <- df %>% 
+        filter(DAC == lv[k])
+      
+      if(sum(tf$neighbor) < 2){ # if the number of neighbor is less than 2, then the estimation is spurious.
+        next
+        
+      }else{
+        tf <- tf %>%
+          mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric()))
+      }
+      
+      fit <- glm(adopter ~ neighbor + factor(Year) + factor(Dist), family = "binomial", data = tf)
+      # summary(fit)
+      
+      sims <- 1000
+      peGlm <- fit$coefficients
+      vcGlm <- vcov(fit)
+      simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+        as.data.frame()
+      
+      
+      nei <- simbetas$neighbor
+      
+      pe <- mean(nei)
+      upper <- quantile(nei, probs= 0.95) 
+      lower <- quantile(nei, probs= 0.05)
+      
+      
+      tp <- cbind(pe,upper,lower) %>% 
+        as.data.frame() %>% 
+        mutate(cluster = lv[k],
+               tech = tc[j],
+               var = "DAC")
+      
+      if(j == 1 & k == 1){ 
+        TP <- tp 
+      }else{
+        TP <- rbind(tp,TP)
+      }
+      
+    }
+    
+  }
+  
+  return(list(TP, fsv))
+}
+
+
+TP <- rbind(tab_gen("Income")[[1]],
+            tab_gen("Edu")[[1]],
+            tab_gen("HomeOwn")[[1]],
+            tab_d()[[1]])
+
+TP1 <- rbind(tab_gen("Income")[[2]],
+             tab_gen("Edu")[[2]],
+             tab_gen("HomeOwn")[[2]],
+             tab_d()[[2]] %>% 
+               rename(ic = "DAC"))
+
+
+
+TP2 <- TP %>% 
+  left_join(TP1 %>% 
+              rename(cluster = ic) %>% 
+              mutate(mean = mean * 100) %>% 
+              dplyr::select(-sd), by = c("cluster","tech","var")) %>% 
+  mutate(cluster = factor(cluster, levels = c("L","M","H",TRUE,FALSE)),
+         tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
+                                        "EV (Seattle)", "HP (Seattle)")),
+         var = factor(var, levels = c("HomeOwn","Income","Edu", "DAC")))
+
+
+
+g1 <- TP2 %>% 
+  filter(tech == "PV (Seattle)") %>% 
+  ggplot() + 
+  geom_col(aes(y = mean/5, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
+  geom_point(aes(y = pe, x = cluster), size = 1.5) +
+  geom_errorbar(aes(x=cluster, ymin=lower, ymax=upper), color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  
+  
+  labs(x = "", fill = "") +
+  
+  scale_fill_viridis_d(direction = -1) +
+  facet_grid(tech ~ var, scales = "free", space = "free", switch = "y") +
+  scale_x_discrete(expand = c(0.7, 0)) +
+  scale_y_continuous(name = "Coefficient (installed base)",
+                     sec.axis = sec_axis(~.*5, name = "Average number of installed housing buildings")) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank())
+
+g2 <- TP2 %>% 
+  filter(tech == "PV (Vermont)") %>% 
+  ggplot() + 
+  geom_col(aes(y = mean/40, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
+  geom_point(aes(y = pe, x = cluster), size = 1.5) +
+  geom_errorbar(aes(x=cluster, ymin=lower, ymax=upper), color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  
+  labs(x = "", fill = "") +
+  
+  scale_fill_viridis_d(direction = -1) +
+  facet_grid(tech ~ var, scales = "free", space = "free", switch = "y") +
+  scale_x_discrete(expand = c(0.7, 0)) +
+  scale_y_continuous(name = "Coefficient (installed base)",
+                     sec.axis = sec_axis(~.*40, name = "Average number of installed housing buildings")) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank(),
+        strip.text.x = element_blank())
+
+g3 <- TP2 %>% 
+  filter(tech == "EV (Seattle)") %>% 
+  ggplot() + 
+  geom_col(aes(y = mean*0.7, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
+  geom_point(aes(y = pe, x = cluster), size = 1.5) +
+  geom_errorbar(aes(x=cluster, ymin=lower, ymax=upper), color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  
+  labs(x = "", fill = "") +
+  
+  scale_fill_viridis_d(direction = -1) +
+  facet_grid(tech ~ var, scales = "free", space = "free", switch = "y") +
+  scale_x_discrete(expand = c(0.7, 0)) +
+  scale_y_continuous(name = "Coefficient (installed base)",
+                     sec.axis = sec_axis(~./0.7, name = "Average number of installed housing buildings")) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank(),
+        strip.text.x = element_blank())
+
+g4 <- TP2 %>% 
+  filter(tech == "HP (Seattle)") %>% 
+  ggplot() + 
+  geom_col(aes(y = mean/10, x = cluster, fill = cluster), position = "dodge", alpha = 0.5) +
+  geom_point(aes(y = pe, x = cluster), size = 1.5) +
+  geom_errorbar(aes(x=cluster, ymin=lower, ymax=upper), color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  
+  labs(x = "", fill = "") +
+  
+  scale_fill_viridis_d(direction = -1) +
+  facet_grid(tech ~ var, scales = "free", space = "free", switch = "y") +
+  scale_x_discrete(expand = c(0.7, 0)) +
+  scale_y_continuous(name = "Coefficient (installed base)",
+                     sec.axis = sec_axis(~.*10, name = "Average number of installed housing buildings")) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank(),
+        strip.text.x = element_blank())
+
+
+
+require(grid)   # for the textGrob() function
+figure <- ggarrange(g1 + rremove("ylab") + rremove("xlab"), 
+                    g2 + rremove("ylab") + rremove("xlab"), 
+                    g3 + rremove("ylab") + rremove("xlab"), 
+                    g4+ rremove("ylab") + rremove("xlab"), # remove axis labels from plots
+                    labels = NULL,
+                    ncol = 1, nrow = 4,
+                    common.legend = TRUE, legend = "bottom",
+                    align = "hv", 
+                    font.label = list(size = 10, color = "black", face = "bold", family = NULL, position = "top"))
+
+f5 <- annotate_figure(figure, 
+                      left = textGrob("Installed base coefficient (point)", rot = 90, vjust = 1, 
+                                              gp = gpar(cex = 1)),
+                      top = textGrob("a", x = 0.03),
+                      right = textGrob("Average rate (%) of installed housing buildings (bar)", rot = 270, vjust = 1, 
+                                       gp = gpar(cex = 1)))
+
+
+# DAC characteristics 
+f6 <- seattle_tracts %>% 
+  st_join(tr.sf %>% 
+            rename(GEOID = FIPS) %>% 
+            filter(STATE_FIPS == 53) %>%
+            dplyr::select(GEOID) %>% 
+            left_join(DAC %>% 
+                        rename(DAC = disadvantaged) %>% 
+                        dplyr::select(GEOID, DAC), by = "GEOID") %>% 
+            st_transform(st_crs(seattle_tracts)$epsg) %>% 
+            dplyr::select(-GEOID),join = st_intersects, largest = TRUE) %>% 
+  mutate(DAC = factor(DAC, levels = c(TRUE, FALSE))) %>% 
+  st_drop_geometry() %>% 
+  mutate_at(vars(HomeOwn,Income,Edu), funs(scale(.) %>% as.numeric())) %>% 
+  gather(key, value, HomeOwn,Income,Edu) %>% 
+  group_by(DAC, key) %>% 
+  summarise(mean = mean(value),
+            sd = sd(value)) %>% 
+  mutate(area = "Seattle") %>% 
+  
+  rbind(
+    temp %>% 
+      st_join(tr.sf %>% 
+                rename(GEOID = FIPS) %>% 
+                filter(STATE_FIPS == 50) %>%
+                dplyr::select(GEOID) %>% 
+                left_join(DAC %>% 
+                            rename(DAC = disadvantaged) %>% 
+                            dplyr::select(GEOID, DAC), by = "GEOID") %>% 
+                st_transform(st_crs(temp)$epsg) %>% 
+                dplyr::select(-GEOID),join = st_intersects, largest = TRUE) %>% 
+      mutate(DAC = factor(DAC, levels = c(TRUE, FALSE))) %>% 
+      st_drop_geometry() %>% 
+      mutate_at(vars(HomeOwn,Income,Edu), funs(scale(.) %>% as.numeric())) %>% 
+      gather(key, value, HomeOwn,Income,Edu) %>% 
+      group_by(DAC, key) %>% 
+      summarise(mean = mean(value),
+                sd = sd(value)) %>% 
+      mutate(area = "Vermont") 
+  ) %>% 
+  mutate(key = factor(key, levels = c("HomeOwn","Income","Edu"))) %>% 
+  ggplot() +
+
+  geom_point(aes(y = mean, x = DAC, color = DAC), position = "dodge", size = 3, alpha = 0.5) +
+  geom_errorbar(aes(x=DAC, ymin=mean-1.96*sd, ymax=mean+1.96*sd), 
+                color = "gray30", width=0.1, alpha=0.9, size=0.7) +
+  
+  labs(x = "", fill = "", y = "Standardized value\n",
+       title = "b") +
+  
+
+  scale_color_manual(values = c(viridis(5)[2],  viridis(5)[1])) +
+  facet_grid(area~key, scales = "free", switch = "y") +
+  scale_x_discrete(expand = c(0.8, 0)) +
+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = -0.06),
+        legend.position = "bottom",
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"),
+        axis.text.x=element_blank())
+          
+ggsave("./Fig/fc.png", ggarrange(f5,f6, heights = c(2,1), nrow = 2),
+       width = 9, height= 8, dpi = 300)
+
+
+
+
+### f6
+### detailed mapping
+library(ggspatial) # for scale bar
+
+tr <- 53033010401
+
+syn <- s_house %>% 
+  ggplot() +
+  geom_sf(fill = "gray50", color = NA) + # buildings
+  geom_sf(data = seattle_tracts %>% # tract layers
+            filter(GEOID == tr), fill = NA, color = "blue") +
+  
+  labs(fill = "", title = "a") +
+  theme_minimal() +
+  annotation_scale() +
+  
+  theme(legend.position = c(0.9,0.3),
+        legend.key.size = unit(0.25, 'cm'),
+        legend.text=element_text(size=6.5),
+        plot.margin = unit(c(0,1,0,0), "cm"),        
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank())
+
+
+t_d <- dfEV %>% # buffers
+  st_transform(4269) %>% 
+  filter(adopter == 1) %>% 
+  st_centroid() %>% 
+  st_join(s_house %>% 
+            st_join(dfEV %>% # buildings
+                      st_transform(4269) %>% 
+                      filter(adopter == 1) %>%
+                      filter(GEOID == tr),  join = st_intersects) %>% 
+            na.omit() %>% 
+            dplyr::select(adopter)) %>% 
+  na.omit()
+
+
+yes <- s_house %>% 
+  st_join(dfEV %>% # buildings
+            st_transform(4269) %>% 
+            filter(adopter == 1) %>%
+            filter(GEOID == tr),  join = st_intersects) %>% 
+  na.omit() %>% 
+  ggplot() +
+  geom_sf(data = seattle_tracts %>% # tract layers
+            filter(GEOID == tr), fill = "gray90", color = "blue", linewidth = 0.5) +
+  geom_sf(fill = "gray60", color = NA) + # buildings
+  geom_sf(data = dfEV %>% # buffers
+            st_transform(4269) %>% 
+            filter(adopter == 1) %>% 
+            filter(GEOID == tr),
+          fill = "red", color = "gray20", alpha = 0.05, size = 0.2) +
+  geom_sf(data = t_d,
+          color = "blue", shape = 4) +
+  
+  geom_sf(data = dfEV %>% # buffers
+            st_transform(4269) %>% 
+            filter(adopter == 1) %>% 
+            filter(Dist == 50) %>% 
+            filter(GEOID == tr) %>% 
+            st_centroid(),
+          color = "red", shape = 16, size = 2) +
+  
+  labs(fill = "", title = "b") +
+  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = -0.05),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank())
+
+
+tt_d <- dfEV %>% # buffers
+  st_transform(4269) %>% 
+  filter(adopter == 1) %>% 
+  st_centroid() %>% 
+  st_join(s_house %>% 
+            st_join(dfEV %>% # buildings
+                      st_transform(4269) %>% 
+                      filter(adopter == 0) %>%
+                      filter(GEOID == tr),  join = st_intersects) %>% 
+            filter(!is.na(Dist)) %>% 
+            dplyr::select(adopter)) %>% 
+  na.omit()
+
+
+no <- s_house %>% 
+  st_join(dfEV %>% # buildings
+            st_transform(4269) %>% 
+            filter(adopter == 0) %>% 
+            filter(GEOID == tr),  join = st_intersects) %>% 
+  filter(!is.na(Dist)) %>% 
+  ggplot() +
+  geom_sf(data = seattle_tracts %>% # tract layers
+            filter(GEOID == tr), fill = "gray90", color = "blue", linewidth = 0.5) +
+  geom_sf(fill = "gray60", color = NA) + # buildings
+  
+  geom_sf(data = dfEV %>% # buffers
+            st_transform(4269) %>% 
+            filter(adopter == 0) %>% 
+            filter(GEOID == tr),
+          fill = "red", color = "gray20", alpha = 0.05, size = 0.2) +
+  
+  geom_sf(data = tt_d,
+          color = "blue", shape = 4) +
+  
+  geom_sf(data = dfEV %>% # buffers
+            st_transform(4269) %>% 
+            filter(adopter == 0) %>% 
+            filter(Dist == 50) %>% 
+            filter(GEOID == tr) %>% 
+            st_centroid(),
+          color = "red", shape = 16) +
+  labs(fill = "", title = "c") +
+  theme_minimal() +
+  annotation_scale() +
+  
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank())
+
+
+
+
+fsm <- ggarrange(syn, ggarrange(yes, no, nrow = 2, heights = c(1.1,1)), nrow = 1)
+ggsave("./Fig/fsm.png", fsm, width = 7, height= 4.7, dpi = 300)
+
+# Vermont
+trv <- 5001715700
+
+vyn <- v_house %>% 
+  ggplot() +
+  geom_sf(fill = "gray70", color = "gray70", size = 0.1) + # buildings
+  geom_sf(data = temp %>% # tract layers
+            filter(GEOID == trv), fill = NA, color = "blue") +
+  
+  labs(fill = "", title = "a\n") +
+  theme_minimal() +
+  annotation_scale() +
+  
+  theme(legend.position = c(0.9,0.3),
+        legend.key.size = unit(0.25, 'cm'),
+        legend.text=element_text(size=6.5),
+        plot.margin = unit(c(0,1,0,0), "cm"),        
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank())
+
+
+
+t_dv <- dfVT %>% # buffers
+  st_transform(4269) %>% 
+  filter(adopter == 1) %>% 
+  filter(Dist == 50) %>% 
+  filter(Year == 2014) %>% 
+  st_centroid() %>% 
+  st_join(dfVT %>% # buildings
+            st_transform(4269) %>% 
+            filter(adopter == 1) %>%
+            filter(GEOID == trv) %>% 
+            filter(Year == 2014) %>% 
+            filter(Dist == 7000) %>% 
+            dplyr::select(adopter),  join = st_intersects) %>% 
+  filter(adopter.y == 1)
+
+
+v_yes <- v_house %>% 
+  
+  st_join(dfVT %>% # buildings
+            st_transform(4269) %>%
+            filter(adopter == 1) %>% 
+            filter(GEOID == trv) %>% 
+            filter(Year == 2014),  join = st_intersects) %>% 
+  na.omit() %>% 
+  
+  ggplot() +
+  geom_sf(data = temp %>% # tract layers
+            filter(GEOID == trv), fill = "gray90", color = "blue") +
+  geom_sf(fill = "gray90") + # buildings
+  geom_sf(data = dfVT %>% # buffers
+            st_transform(4269) %>% 
+            filter(adopter == 1) %>% 
+            filter(GEOID == trv) %>% 
+            filter(Year == 2014),
+          fill = "red", color = "gray20", alpha = 0.05, size = 0.08) +
+  
+  geom_sf(data = t_dv,
+          color = "blue", shape = 4) +
+  
+  geom_sf(data = dfVT %>% # point
+            st_transform(4269) %>% 
+            filter(adopter == 1) %>% 
+            filter(Dist == 50) %>% 
+            filter(GEOID == trv) %>% 
+            filter(Year == 2014) %>% 
+            st_centroid(),
+          color = "red", shape = 16) +
+  labs(fill = "", title = "b") +
+  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = -0.1),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank())
+
+
+tt_dv <- dfVT %>% # buffers
+  st_transform(4269) %>% 
+  filter(adopter == 1) %>% 
+  st_centroid() %>% 
+  st_join(v_house %>% 
+            st_join(dfVT %>% # buildings
+                      st_transform(4269) %>% 
+                      filter(adopter == 0) %>%
+                      filter(GEOID == trv) %>% 
+                      filter(Year == 2014),  join = st_intersects) %>% 
+            filter(!is.na(GEOID)) %>% 
+            dplyr::select(adopter)) %>% 
+  na.omit()
+
+tt_dv <- dfVT %>% # buffers
+  st_transform(4269) %>% 
+  filter(adopter == 1) %>% 
+  filter(Dist == 50) %>% 
+  filter(Year == 2014) %>% 
+  st_centroid() %>% 
+  st_join(dfVT %>% # buildings
+            st_transform(4269) %>% 
+            filter(adopter == 0) %>%
+            filter(GEOID == trv) %>% 
+            filter(Year == 2014) %>% 
+            filter(Dist == 7000) %>% 
+            dplyr::select(adopter),  join = st_intersects) %>% 
+  filter(adopter.y == 0)
+
+
+v_no <- v_house %>% 
+  
+  st_join(dfVT %>% # buildings
+            st_transform(4269) %>% 
+            filter(adopter == 0) %>% 
+            filter(GEOID == trv)%>% 
+            filter(Year == 2014),  join = st_intersects) %>% 
+  filter(!is.na(GEOID)) %>% 
+  
+  ggplot() +
+  geom_sf(data = temp %>% # tract layers
+            filter(GEOID == trv), fill = "gray90", color = "blue") +
+  geom_sf(fill = "gray90") + # buildings
+  geom_sf(data = dfVT %>% # buffers
+            st_transform(4269) %>% 
+            filter(adopter == 0) %>% 
+            filter(GEOID == trv) %>% 
+            filter(Year == 2014),
+          fill = "red", color = "gray20", alpha = 0.05, size = 0.08) +
+  
+  geom_sf(data = tt_dv,
+          color = "blue", shape = 4) +
+  
+  geom_sf(data = dfVT %>% # buffers
+            st_transform(4269) %>% 
+            filter(adopter == 0) %>% 
+            filter(Dist == 50) %>% 
+            filter(GEOID == trv) %>% 
+            filter(Year == 2014) %>% 
+            st_centroid(),
+          color = "red", shape = 16) +
+  labs(fill = "", title = "c") +
+  theme_minimal() +
+  annotation_scale() +
+  
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank())
+
+fvm <- ggarrange(vyn, ggarrange(v_yes, v_no, nrow = 2), nrow = 1, widths = c(1,1))
+ggsave("./Fig/fvm.png", fvm, width = 7, height= 5.6, dpi = 300)
+
+### f8
+nm <- names(tfr %>% 
+              st_drop_geometry() %>% 
+              dplyr::select(Installed.Base,Year,PopDensity:Gini))
+md <- c("Within tract sampling", "Across tract sampling")
+for(i in 1:2){
+  
+  if(i == 1){tf <- tfg }else{tf <- tfr}
+  
+
+  fit <- glm(adopter ~ Year+Installed.Base+
+               PopDensity+HomeOwn+SingleFamily+Edu+HomeValue+Income+White+      
+               Poverty+Gini,
+             family = "binomial", data = tf)
+  # summary(fit)
+  
+  sims <- 1000
+  peGlm <- fit$coefficients
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+    as.data.frame()
+  
+  
+  for(j in 1:11){
+    nei <- simbetas[,nm[j]]
+    
+    pe <- exp(mean(nei))
+    upper <- quantile(nei, probs= 0.95) %>% exp()
+    lower <- quantile(nei, probs= 0.05) %>% exp()
+    
+    
+    tp <- cbind(pe,upper,lower) %>% 
+      as.data.frame() %>% 
+      mutate(var = nm[j],
+             model = md[i])
+    
+    if(i == 1 & j == 1){ 
+      TP <- tp 
+    }else{
+      TP <- rbind(tp,TP)
+    }
+    
+  }
+  
+}
+
+smp <- TP %>%
+  as.data.frame() %>%
+  mutate(var = factor(var, levels = nm),
+         model = factor(model, levels = md)) %>%
+  mutate(color = ifelse(upper > 1 & lower > 1, "Y",
+                        ifelse(upper < 1 & lower < 1, "Y", "N")),
+         color = factor(color, levels = c("Y", "N"))) %>% 
+  
+  ggplot(aes(y = pe, x = reorder(var,pe), group = var)) +
+  geom_errorbar(aes(ymin=lower, ymax=upper),width = 0.1, size = 0.7) +
+  geom_point(aes(color = color), size = 2.8) +
+  geom_hline(yintercept = 1,linetype = "dotted", size = 1) +
+  coord_flip() +
+  facet_wrap(~model, scale = "free") +
+
+  labs(x = "", y ="Odds ratio", 
+       title = "a") +
+  scale_color_manual(values = c("Y" = "red", "N" = "grey"), 
+                     # labels = c("N","Y"),
+                     name = "Significance") +
+
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+
+smp1 <- d.200 %>% 
+  st_drop_geometry() %>% 
+  filter(sample != "cluster") %>% 
+  mutate(adopter = ifelse(adopter == 0, "N", "Y"),
+         adopter = factor(adopter, levels = c("Y", "N")),
+         sample = ifelse(sample == "GEOID", "Within tract sampling", "Across tract sampling")) %>% 
+  group_by(Year, cluster, adopter, sample) %>% 
+  summarise(mean = mean(neighbor)) %>% 
+  mutate(sample = factor(sample, levels = c("Within tract sampling", "Across tract sampling"))) %>% 
+  ggplot(aes(x = Year, y = mean, color = adopter)) + 
+  # geom_line() +
+  geom_smooth(aes(fill = adopter),alpha = 0.1, linewidth = 0.5) +
+  labs(x = "Year", y= "\nAverage number of \nneighboring installed \nhousing buildings\n",
+       color = "Adopter", fill = "Adopter",
+       title = "b") +
+  annotate("text", x=2012, y=2, label= "Within 200m",
+           hjust = 0) +
+  scale_x_continuous(breaks = c(2011,2015,2019)) +
+  facet_wrap(~sample, scale = "free") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+ggsave("./Fig/fsmp.png", ggarrange(smp, smp1, nrow = 2, heights = c(1,0.8)), 
+       width = 10, height= 8, dpi = 300)
+
+
+### S1
+# point clustering analysis
+# Clark and Evans test aggregation index R
+as.ppp(PV[,c(6,7)], W= owin(c(min(PV$Lon), max(PV$Lon)), c(min(PV$Lat), max(PV$Lat)))) %>% 
+  clarkevans.test
+
+as.ppp(EV[,c(6,7)], W= owin(c(min(EV$Lon), max(EV$Lon)), c(min(EV$Lat), max(EV$Lat)))) %>% 
+  clarkevans.test
+
+as.ppp(Pump[,c(5,6)], W= owin(c(min(Pump$Lon), max(Pump$Lon)), c(min(Pump$Lat), max(Pump$Lat)))) %>% 
+  clarkevans.test
+
+as.ppp(VPV[,c(4,3)], W= owin(c(min(VPV$Lon), max(VPV$Lon)), c(min(VPV$Lat), max(VPV$Lat)))) %>% 
+  clarkevans.test
+
+# G estimates
+png(filename="./Fig/G.png", width = 1100, height = 400)
+par(mfrow=c(1,4))
+as.ppp(PV[,c(6,7)], W= owin(c(min(PV$Lon), max(PV$Lon)), c(min(PV$Lat), max(PV$Lat)))) %>%
+  envelope(fun= Gest, nrank= 2, nsim= 99, verbose = F) %>% plot(main = "PV (Seattle)",ylab="", xlab="Distance (r)",
+                                                                cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
+
+as.ppp(VPV[,c(4,3)], W= owin(c(min(VPV$Lon), max(VPV$Lon)), c(min(VPV$Lat), max(VPV$Lat)))) %>%
+  envelope(fun= Gest, nrank= 2, nsim= 99, verbose = FALSE) %>% plot(main = "PV (Vermont)",ylab="", xlab="Distance (r)",
+                                                                    cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
+
+as.ppp(EV[,c(6,7)], W= owin(c(min(EV$Lon), max(EV$Lon)), c(min(EV$Lat), max(EV$Lat)))) %>%
+  envelope(fun= Gest, nrank= 2, nsim= 99, verbose = F) %>% plot(main = "EV (Seattle)",ylab="", xlab="Distance (r)",
+                                                                cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
+
+as.ppp(Pump[,c(5,6)], W= owin(c(min(Pump$Lon), max(Pump$Lon)), c(min(Pump$Lat), max(Pump$Lat)))) %>%
+  envelope(fun= Gest, nrank= 2, nsim= 99, verbose = F) %>% plot(main = "HP (Seattle)",ylab="", xlab="Distance (r)",
+                                                                cex.lab=1.5, cex.axis=1.5, cex.main=2, cex.sub=1.5)
+dev.off()
+
+
+### S2
+### DAC 
+var <- DAC %>% 
+  dplyr::select(GEOID, disadvantaged:`poverty level`)
+
+nm <- names(var)[-1]
+
+group <- list(dfPV,dfVT, dfEV,dfPump)
+g <-  c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", "HP (Seattle)")
+data <- data.frame()
+for(i in 1:length(group)){
+  
+  if(i == 2){
+    
+    dat <- tr.sf %>% 
+      rename(GEOID = FIPS) %>% 
+      filter(STATE_FIPS == "50") %>%
+      dplyr::select(GEOID) %>% 
+      left_join(var, by = "GEOID") %>% 
+      st_transform(32618) %>% 
+      dplyr::select(-GEOID) %>% 
+      
+      st_join(
+        dfVT %>%
+          group_by(GEOID) %>%
+          summarise(N = n()), join = st_intersects, largest = TRUE) %>%
+      mutate_at(c("N"), ~replace_na(.,0)) %>%   # replace NA with 0
+      st_drop_geometry() %>% 
+      dplyr::select(GEOID, everything())
+    
+    
+  }else{
+    
+    dat <- tr.sf %>% 
+      rename(GEOID = FIPS) %>% 
+      filter(STATE_FIPS == "53") %>%
+      dplyr::select(GEOID) %>% 
+      left_join(var, by = "GEOID") %>% 
+      st_transform(32610) %>% 
+      dplyr::select(-GEOID) %>% 
+      
+      st_join(
+        group[[i]] %>%
+          group_by(GEOID) %>%
+          summarise(N = n()), join = st_intersects, largest = TRUE) %>%
+      mutate_at(c("N"), ~replace_na(.,0)) %>%   # replace NA with 0
+      st_drop_geometry() %>% 
+      dplyr::select(GEOID, everything())
+    
+  }
+  
+  
+  
+  da <- data.frame()
+  for(j in 2:(length(colnames(dat))-1)){
+    d <- dat %>%
+      group_by(get(colnames(dat)[j])) %>%
+      summarise(value = sum(N)) %>%
+      mutate(sum = sum(value),
+             perc = value/sum*100)
+    
+    d<- d[2,]
+    
+    da <- rbind(d,da)
+    
+  }
+  
+  da <- da %>%
+    cbind(data.frame(var = rev(colnames(dat))[c(-1,-32)])) %>%
+    mutate(type = g[i])
+  
+  data <- rbind(da, data)
+  
+}
+
+
+lab <- c("Workforce","Health", "Waster\nwater", "Pollution",
+         "Housing", "Transpor\ntation", "Energy", "Climate")
+
+
+jst <- data %>% 
+  mutate_at(c("perc"), ~replace_na(.,0)) %>% 
+  mutate(var = factor(var, levels = nm),
+         
+         class = ifelse(var == nm[1], "total",
+                        ifelse(var %in% nm[27:30], "education", "income")),
+         cat = ifelse(var == nm[1], "Community",
+                      ifelse(var %in% nm[2:6], lab[8], 
+                             ifelse(var %in% nm[7:8], lab[7],
+                                    ifelse(var %in% nm[9:11], lab[6],
+                                           ifelse(var %in% nm[12:15], lab[5],
+                                                  ifelse(var %in% nm[16:20], lab[4],
+                                                         ifelse(var %in% nm[21:22], lab[3],
+                                                                ifelse(var %in% nm[23:26], lab[2], lab[1])))))))),
+         color = cut(perc, breaks = c(0,3,6,10), include.lowest = T),
+         tot = ifelse(class == "total", 10.7, 9.1)) 
+
+
+
+# library(lemon)
+f1 <- jst %>% 
+  mutate(type = factor(type, levels = g)) %>% 
+  
+  filter(class == "total") %>% 
+  mutate(var = "     disadvantaged",
+         cat = "Combined\ncommunity") %>% 
+  ggplot() +
+  geom_col(aes(x = tot, y = var), fill = "gray", position = "dodge", width = 0.5) +
+  geom_col(aes(x = perc, y = var),  fill = "gray20", position = "dodge", width = 0.5) +
+  
+  labs(x = "", y = "\n\n\n\n\n\n\n", fill = "") + 
+  facet_grid(cat+class ~type, scales = "free", space = "free", switch = "y") +
+  geom_text(aes(x = perc-2, y = 1, label = paste0(round(perc, 0),"%")), 
+            size = 2, color = "white") +
+  
+  theme_classic() +
+  theme(legend.position = "none",
+        strip.text.y = element_text(size = 6))
+
+# cols <- hue_pal()(3)
+f2 <- jst %>% 
+  mutate(type = factor(type, levels = g)) %>% 
+  filter(class != "total") %>% 
+  ggplot() +
+  geom_col(aes(x = tot, y = var), fill = "gray", position = "dodge", width = 0.9) +
+  geom_col(aes(x = perc, y = var, fill = color), position = "dodge", width = 0.9) +
+  
+  labs(x = "", y = "", fill = "") + 
+
+  scale_fill_viridis_d(begin = 0.2, end = 0.95) +
+  facet_grid(cat+class ~type, scales = "free", space = "free", switch = "y") +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        strip.text.y = element_text(size = 6))
+
+library(ggpubr)
+f12<- ggarrange(f1,f2, nrow = 2, heights = c(0.2,1))
+
+ggsave("./Fig/jst.png", f12, width = 10, height = 8, dpi=300)
+
+
+
+### s3
+# by neighbor and Dist 
+df <- list(dfPV,dfVT, dfEV,dfPump)
+tch <- c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+         "HP (Seattle)")
+
+TP <- data.frame()
+for(j in 1:4){
+  for(i in c(100,250,500)){
+    tf <- df[[j]] %>% 
+      st_drop_geometry() %>% 
+      filter(Dist == i)  
+    
+    
+    fit <- glm(adopter ~ neighbor, family = "binomial", data = tf)
+    # summary(fit)
+    
+    
+    nei <- seq(0, 10, by = 1)
+    year <- rep(2019, length(nei))
+    cons <- rep(1, length(nei))
+    x <- cbind(cons, nei) %>% 
+      as.matrix()
+    
+    
+    sims <- 1000
+    pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+    peGlm <- pe[1:2]
+    vcGlm <- vcov(fit)
+    simbetas <- mvrnorm(sims, peGlm, vcGlm) %>%
+      as.data.frame() 
+    
+    xbeta <- x %*% t(simbetas)
+    inverse.logit <- function(xb){
+      1/(1+exp(-xb))}
+    
+    
+    prob <-
+      inverse.logit(xbeta)
+    
+    pe <- apply(prob, 1, mean)
+    upper <- apply(prob, 1, quantile, probs= 0.95)
+    lower <- apply(prob, 1, quantile, probs= 0.05)
+    
+    
+    tp <- cbind(x,pe,upper,lower) %>% 
+      as.data.frame() %>% 
+      mutate(Dist = i,
+             tech = tch[j])
+    
+    TP <- rbind(tp,TP)
+    
+  }
+  
+}
+
+
+
+# nei
+s3 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)",
+                                        "EV (Seattle)", "HP (Seattle)"))) %>%
+  mutate_at(vars(pe,upper,lower), funs(.*100-50)) %>% 
+  ggplot(aes(x = nei, y = pe, ymax = upper, ymin = lower, fill = factor(Dist))) +
+  geom_line(aes(color = factor(Dist))) +
+  geom_ribbon(alpha = 0.1, linetype = 0) +
+
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(y = "Probability of adoption\nrelative to non-adopters (%)", x = "Number of neighbor installations", color = "Distance (m)", fill = "Distance (m)") +
+  scale_x_continuous(breaks = 0:10) +
+  facet_wrap(~tech, nrow = 1) +
+
+  theme_classic()+
+  theme(
+    panel.background = element_rect(fill = NA),
+    axis.line.x.bottom = element_line(size = 0.5),
+    axis.ticks.length = unit(0.5, "char"),
+    legend.position = "bottom",
+    axis.line.x = element_line(color="black"),
+    axis.line.y = element_line(color="black"))
+
+ggsave("./Fig/s3.png", s3, 
+       width = 10, height= 4, dpi = 300)
+
+
+# by neighbor and year 
+for(i in seq(2011,2019, by = 2)){
+  tf <- df[[1]] %>% 
+    filter(Year == i)
+  
+  fit <- glm(adopter ~ neighbor + Dist, family = "binomial", data = tf)
+  # summary(fit)
+  
+  
+  nei <- seq(0, 10, by = 1)
+  rad <- rep(250, length(nei))
+  cons <- rep(1, length(nei))
+  x <- cbind(cons, nei, rad)
+  
+  sims <- 1000
+  peGlm <- fit$coefficients
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm)
+  xbeta <- x %*% t(simbetas)
+  inverse.logit <- function(xb){
+    1/(1+exp(-xb))
+  
+  prob <-
+    inverse.logit(xbeta)
+  
+  pe <- apply(prob, 1, mean)
+  upper <- apply(prob, 1, quantile, probs= 0.95)
+  lower <- apply(prob, 1, quantile, probs= 0.05)
+  
+  
+  tp <- cbind(x,pe,upper,lower) %>% 
+    as.data.frame() %>% 
+    mutate(year = i)
+  if(i == 2011){
+    TP <- tp 
+  }else{
+    TP <- rbind(tp,TP)
+  }
+  
+}
+
+
+# year
+TP %>%
+  as.data.frame() %>%
+  ggplot(aes(x = nei, y = pe, ymax = upper, ymin = lower, fill = factor(year))) +
+  geom_line(aes(color = factor(year))) +
+  geom_ribbon(alpha = 0.07, linetype = 0) +
+  labs(y = "Probability", x = "Number of neighbor installation", color = "Year", fill = "Year") +
+  scale_x_continuous(breaks = 0:10) +
+  annotate("text", x=0.35, y=0.5, label= "Dist = 250m",
+           hjust = 0) +
+  theme(
+    panel.background = element_rect(fill = NA),
+    axis.line.x.bottom = element_line(size = 0.5),
+    axis.ticks.length = unit(0.5, "char"),
+    legend.position = c(0.13,0.8),
+    axis.line.x = element_line(color="black"),
+    axis.line.y = element_line(color="black"))
+
+
+
+
+
+### s4
+# define df for the technologies to analyze. 
+df <- list(dfPV,dfVT, dfEV,dfPump)
+tch <- c("PV (Seattle)", "PV (Vermont)", "EV (Seattle)", 
+         "HP (Seattle)")
+
+
+TP <- data.frame()
+for(j in 1:4){
+  ff <- df[[j]] %>% 
+    st_drop_geometry()
+  
+  for(i in unique(df[[j]]$Dist)){
+    
+    tf <- ff %>% 
+      filter(Dist == i) %>% 
+      mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric())) %>% 
+      mutate(Year = factor(Year))
+    
+    
+    fit <- glmer(adopter ~ neighbor + (1| Year), family = "binomial", data = tf)
+    
+    sims <- 1000
+    pe <- fit %>% tidy() %>% dplyr::select(estimate) %>% as.matrix()
+    peGlm <- pe[1:2]
+    vcGlm <- vcov(fit)
+    simbetas <- mvrnorm(sims, peGlm, vcGlm) %>%
+      as.data.frame()
+    
+    
+    nei <- simbetas$neighbor
+    
+    pe <- exp(mean(nei))
+    upper <- quantile(nei, probs= 0.95) %>% exp()
+    lower <- quantile(nei, probs= 0.05) %>% exp()
+    
+    
+    tp <- cbind(pe,upper,lower) %>% 
+      as.data.frame() %>% 
+      mutate(Dist = i,
+             tech = tch[j])
+    
+    TP <- rbind(tp,TP)
+    
+  }
+  
+}
+
+s4 <- TP %>%
+  as.data.frame() %>%
+  mutate(tech = factor(tech, levels = tch)) %>% 
+  ggplot(aes(x = Dist, y = pe)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar( aes(x=Dist, ymin=lower, ymax=upper), width=10, colour="red", alpha=0.5, size=1) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_vline(xintercept  = 505.4,
+             linetype="dotdash", size=1) +
+  geom_vline(data = TP %>%
+               as.data.frame() %>% 
+               mutate(tech = factor(tech, levels = tch)) %>% 
+               filter(tech == "PV (Vermont)"), aes(xintercept  = 4030),
+             linetype="dotted", size=1) +
+
+  labs(title = "", y = "Installed based odds ratios (standardized)", x = "Distance (m)") +
+  facet_wrap(~tech, nrow = 4, switch = "y", scale = "free") +
+  theme_minimal() + 
+  theme(plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"),
+        axis.line.y = element_line(color="black"))
+
+ggsave("./Fig/s4.png", s4, 
+       width = 10, height= 8, dpi = 300)
+
+
+
+### S5
+mp_gen <- function(variable){
+  lv <- c("L","M","H")
+  num <- 3
+  
+  
+  se <- seattle_tracts %>%
+    mutate_at(vars(HomeOwn,Income,Edu), funs(rescale(., to=c(0,1)))) %>% 
+    mutate(ic = ifelse(get(variable) > quantile(get(variable), 0.8) , "H",
+                       ifelse(get(variable) > quantile(get(variable), 0.2), "M","L")),
+           ic = factor(ic, levels = lv)) 
+  
+  ve <- temp %>%
+    mutate_at(vars(HomeOwn,Income,Edu), funs(rescale(., to=c(0,1)))) %>% 
+    mutate(ic = ifelse(get(variable) > quantile(get(variable), 0.8) , "H",
+                       ifelse(get(variable) > quantile(get(variable), 0.2), "M","L")),
+           ic = factor(ic, levels = lv)) 
+  
+  return(list(se,ve))
+  
+}
+
+m1 <- mp_gen("HomeOwn")[[1]] %>% 
+  ggplot() +
+  geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
+
+  scale_fill_viridis_d(direction = -1) +
+  labs(fill = "", title = "Homeownership") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=10),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.position = "none")
+
+
+m2 <- mp_gen("Income")[[1]] %>% 
+  ggplot() +
+  geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
+
+  scale_fill_viridis_d(direction = -1) +
+  labs(fill = "", title = "Income") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=10),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.position = "none")
+
+
+m3 <- mp_gen("Edu")[[1]] %>% 
+  ggplot() +
+  geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
+
+  scale_fill_viridis_d(direction = -1) +
+  labs(fill = "", title = "Education") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=10),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.position = "none")
+
+
+m11 <- mp_gen("HomeOwn")[[2]] %>% 
+  ggplot() +
+  geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
+
+  scale_fill_viridis_d(direction = -1) +
+  labs(fill = "", title = "Homeownership") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=10),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.position = "none")
+
+
+m12 <- mp_gen("Income")[[2]] %>% 
+  ggplot() +
+  geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
+
+  scale_fill_viridis_d(direction = -1) +
+  labs(fill = "", title = "Income") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=10),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.position = "none")
+
+
+m13<- mp_gen("Edu")[[2]] %>% 
+  ggplot() +
+  geom_sf(aes(fill = ic), color = "gray50", alpha = 0.5) + # border 
+
+  scale_fill_viridis_d(direction = -1) +
+  labs(fill = "", title = "Education") +
+  theme_minimal() +
+  theme(plot.title = element_text(size=10),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        rect = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        legend.position = "none")
+
+
+
+ggsave("./Fig/vul.png", ggarrange(m1,m2, m3, m11,m12,m13, nrow = 2, ncol = 3,
+                                  common.legend = TRUE, legend = "bottom"), 
+       width = 9, height= 7, dpi = 300)
+
+
+### t1
+seattle_tracts %>% 
+  st_drop_geometry() %>% 
+  dplyr::select(-Area) %>% 
+  stargazer(type = "text")
+
+### t2
+temp %>% 
+  st_drop_geometry() %>% 
+  dplyr::select(HomeOwn,Edu,Income) %>% 
+  mutate_all(funs(./100)) %>% 
+  as.data.frame() %>% 
+  stargazer(type = "text")
+
+
+### t3
+# only for solar to see the difference by sampling 
+tfr <- d.200 %>% 
+  filter(sample == "random") %>% 
+  rename(Installed.Base = neighbor) %>% 
+  mutate_at(vars(PopDensity:Gini,Installed.Base,Year), funs(scale(.) %>% as.numeric()))
+
+tfg <- d.200 %>% 
+  filter(sample == "GEOID") %>% 
+  rename(Installed.Base = neighbor) %>% 
+  mutate_at(vars(PopDensity:Gini,Installed.Base,Year), funs(scale(.) %>% as.numeric()))
+
+
+# regression
+
+fit <- glm(adopter ~ Year+Installed.Base+
+             PopDensity+HomeOwn+SingleFamily+Edu+HomeValue+Income+White+      
+             Poverty+Gini,
+           family = "binomial", data = tfg)
+# summary(fit)
+
+fit1 <- glm(adopter ~ Year+Installed.Base+
+              PopDensity+HomeOwn+SingleFamily+Edu+HomeValue+Income+White+      
+              Poverty+Gini,
+            family = "binomial", data = tfr)
+
+
+stargazer(fit, fit1, type = "text",
+          header = FALSE,  # For no message from the author
+          title = "",
+          model.numbers=FALSE,
+          # column.labels = c("SAR",'',"SAR",'','SAR',''),
+          single.row = F,
+          no.space = TRUE, # to remove the spaces after each line of coefficients
+          omit = c("Constant"),
+          column.sep.width = "0pt", # to reduce column width
+          
+          font.size = "small", # to make font size smaller
+          omit.stat=c("rsq","ser","f","AIC","ll","sigma2","wald","adj.rsq","theta"),
+          add.lines=list(c('Akaike Inf. Crit.',round(AIC(fit),1),
+                           round(AIC(fit1),1))),
+          label = "tab:t42")

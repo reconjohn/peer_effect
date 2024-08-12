@@ -1,0 +1,263 @@
+source("./syntax/Function.R")
+
+# diffusion 1 - peer effects - point data
+## for the personal project for peer effect paper
+
+load("./data/diffusion.Rdata") # d.50,d.200,d.250,d.300,d.500,d.1000,dfPV,dfEV, dfPump
+load("./data/diffusionVT.Rdata") # dfVT
+
+
+# visualization 
+# by year
+tf <- df[[1]] %>% 
+  mutate_at(vars(PopDensity:Gini,neighbor, Dist), funs(scale(.) %>% as.numeric()))
+fit <- glm(adopter ~ Year+neighbor+Dist, family = "binomial", data = tf)
+summary(fit)
+
+year <- seq(2011, 2019, by = 1)
+nei <- rep(mean(tf$neighbor), length(year))
+rad <- rep(mean(tf$Dist), length(year))
+cons <- rep(1, length(year))
+x <- cbind(cons, year, nei, rad)
+
+
+# by Dist
+tf <- df %>% 
+  mutate_at(vars(PopDensity:Gini,neighbor), funs(scale(.) %>% as.numeric()))
+fit <- glm(adopter ~ Year+neighbor+Dist, family = "binomial", data = tf)
+summary(fit)
+rad <- seq(50, 1000, by = 50)
+nei <- rep(mean(tf$neighbor), length(rad))
+year <- rep(mean(tf$Year), length(rad))
+cons <- rep(1, length(rad))
+x <- cbind(cons, year, nei, rad)
+
+
+# by neighbor
+tf <- df %>% 
+  mutate_at(vars(PopDensity:Gini,Dist), funs(scale(.) %>% as.numeric()))
+fit <- glm(adopter ~ Year+neighbor+Dist, family = "binomial", data = tf)
+summary(fit)
+nei <- seq(0, 1500, by = 1)
+rad <- rep(mean(tf$Dist), length(nei))
+year <- rep(mean(tf$Year), length(nei))
+cons <- rep(1, length(nei))
+x <- cbind(cons, year, nei, rad)
+
+
+
+sims <- 1000
+peGlm <- fit$coefficients
+vcGlm <- vcov(fit)
+simbetas <- mvrnorm(sims, peGlm, vcGlm)
+xbeta <- x %*% t(simbetas)
+inverse.logit <- function(xb){
+  1/(1+exp(-xb))
+  # See Topic 3 slides to create logit function
+}
+prob <-
+  inverse.logit(xbeta)
+pe <- apply(prob, 1, mean)
+upper <- apply(prob, 1, quantile, probs= 0.95)
+lower <- apply(prob, 1, quantile, probs= 0.05)
+
+
+# year
+cbind(x,pe,upper,lower) %>%
+  as.data.frame() %>%
+  ggplot(aes(x = year, y = pe, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2, linetype = 0) +
+  labs(y = "Probability", x = "Year") +
+  theme(
+    panel.background = element_rect(fill = NA),
+    axis.line.x.bottom = element_line(size = 0.5),
+    axis.ticks.length = unit(0.5, "char"),
+    legend.position = "none")
+
+# rad
+cbind(x,pe,upper,lower) %>%
+  as.data.frame() %>%
+  ggplot(aes(x = rad, y = pe, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2, linetype = 0) +
+  labs(y = "Probability", x = "Dist") +
+  theme(
+    panel.background = element_rect(fill = NA),
+    axis.line.x.bottom = element_line(size = 0.5),
+    axis.ticks.length = unit(0.5, "char"),
+    legend.position = "none")
+
+
+# nei
+cbind(x,pe,upper,lower) %>%
+  as.data.frame() %>%
+  ggplot(aes(x = nei, y = pe, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2, linetype = 0) +
+  labs(y = "Probability", x = "Neighbor") +
+  theme(
+    panel.background = element_rect(fill = NA),
+    axis.line.x.bottom = element_line(size = 0.5),
+    axis.ticks.length = unit(0.5, "char"),
+    legend.position = "none")
+
+
+# visualization 
+
+# cluster 
+for(i in 1:5){
+  tf <- df %>% 
+    filter(cluster == i) %>% 
+    mutate_at(vars(PopDensity:Gini,neighbor, Dist), funs(scale(.) %>% as.numeric()))
+    
+  
+  fit <- glm(adopter ~ Year + neighbor + Dist, family = "binomial", data = tf)
+  # summary(fit)
+  
+  sims <- 1000
+  peGlm <- fit$coefficients
+  vcGlm <- vcov(fit)
+  simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
+    as.data.frame()
+  
+  
+  nei <- simbetas$neighbor
+  
+  pe <- mean(nei)
+  upper <- quantile(nei, probs= 0.95)
+  lower <- quantile(nei, probs= 0.05)
+  
+  
+  tp <- cbind(pe,upper,lower) %>% 
+    as.data.frame() %>% 
+    mutate(cluster = i)
+  if(i == 1){
+    TP <- tp 
+  }else{
+    TP <- rbind(tp,TP)
+  }
+  
+}
+
+
+# cluster
+TP %>%
+  as.data.frame() %>%
+ggplot(aes(y = reorder(cluster,pe),
+           x = pe,
+           xmax = upper,
+           xmin = lower)) +
+  geom_pointrangeh(position = position_dodge2v(height = 0.7), fatten = 2, size = 0.8, shape = 15) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  # scale_color_grey()+
+  scale_x_continuous(# limits = c(min(total_pe[3]), max(total_pe[2])),
+    # breaks = seq(min(total_pe), max(total_pe), by =2),
+    # labels = c("0%", "+1%", "+2%"),
+    sec.axis =  sec_axis(~ ., name = "")) + # sec.axis = sec_axis(~ . - mean(sp_regime$Adoption), name = "Deviation from Mean %")
+  labs(title = "", y = "", x = "Peer effect") +
+  theme_minimal() + 
+  theme(plot.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color="black"))
+
+
+
+
+
+
+# visualization  
+# by neighbor and Dist 
+tf <- df[[1]] %>% 
+  filter(cluster == 5) %>% 
+  mutate_at(vars(PopDensity:Gini,neighbor,Dist), funs(scale(.) %>% as.numeric())) 
+  
+  
+fit <- glm(adopter ~ Year+neighbor+Dist, family = "binomial", data = tf)
+summary(fit)
+
+
+nei <- rep(seq(0, 50, by = 1),2)
+rad <- c(rep(100, length(nei)/2),rep(633, length(nei)/2))
+year <- rep(mean(tf$Year), length(nei))
+cons <- rep(1, length(nei))
+x <- cbind(cons, year, nei, rad)
+
+
+sims <- 1000
+peGlm <- fit$coefficients
+vcGlm <- vcov(fit)
+simbetas <- mvrnorm(sims, peGlm, vcGlm)
+xbeta <- x %*% t(simbetas)
+inverse.logit <- function(xb){
+  1/(1+exp(-xb))
+  # See Topic 3 slides to create logit function
+}
+prob <-
+  inverse.logit(xbeta)
+prob <- prob[1:51,]/ prob[52:102,]
+
+pe <- apply(prob, 1, mean)
+upper <- apply(prob, 1, quantile, probs= 0.95)
+lower <- apply(prob, 1, quantile, probs= 0.05)
+
+
+tp <- cbind(x,pe,upper,lower)
+# TP <- tp
+TP <- rbind(TP, tp)
+
+
+# nei
+tp %>%
+  as.data.frame() %>%
+  ggplot(aes(x = nei, y = pe, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2, linetype = 0) +
+  labs(y = "Probability", x = "Neighbor") +
+  theme(
+    panel.background = element_rect(fill = NA),
+    axis.line.x.bottom = element_line(size = 0.5),
+    axis.ticks.length = unit(0.5, "char"),
+    legend.position = "none")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# appendix
+# count housing units per Dist
+proj_buffer <- proj %>% 
+  st_buffer(dist = 633) 
+
+proj_buffer$neighbor <- lengths(st_intersects(proj_buffer, proj))
+
+mean(proj_buffer$neighbor)
+# 50m - 12 houses; 250m - 242 houses; 633m - 1360 houses
+
+# compute average Dist of a census tract 
+mean(st_area(seattle_tracts)) %>% sqrt()/2
+
+# compute average neighbor installation by Dist
+df %>% 
+  st_drop_geometry() %>% 
+  group_by(Dist, Year) %>% 
+  summarise(mean = mean(neighbor)) %>% View
+
+

@@ -1,0 +1,184 @@
+# libraries
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(readxl)
+library(stringdist)
+library(tidyverse)
+library(openxlsx)
+library(readr)
+library(scales)
+library(sf)
+library(stargazer)
+library(Hmisc)
+library(ggpubr)
+library(mapview)
+library(leafsync)
+
+sf::sf_use_s2(FALSE)
+load("C:/Users/yohan/Big_data/US Tract/census.Rdata") #tr.sf, st
+
+DAC <- read_csv("../DAC/results/DAC_s.csv")
+
+dis <- tr.sf %>% 
+  rename(GEOID = FIPS) %>% 
+  dplyr::select(GEOID) %>% 
+  left_join(DAC %>% 
+              dplyr::select(GEOID, disadvantaged), by = "GEOID") 
+
+
+relevant_variables_demographics = c("POPDEN",
+                                    "OVER64", 
+                                    "UNDER5", # relevant demographics variables
+                                    "LINGISO",
+                                    "PEOPCOLOR",
+                                    "UNEMPLOYED", 
+                                    "LOWINCOME",
+                                    "LESSHS")
+
+
+# join demo data
+demo <- read_csv("./data/demographic_df_feats_tract.csv") %>%
+  mutate(GEOID = ifelse(GEOID < 10001040100, paste0("0",GEOID), GEOID) %>%
+           as.character()) %>% 
+  dplyr::rename(POPDEN =populationdensity) %>% 
+  dplyr::select(GEOID, population, POPDEN)
+
+
+dem <- read_csv("../DAC/results/DAC_s.csv") %>% 
+
+  mutate(PEOPCOLOR = PEOPCOLORPCT,
+         LOWINCOME = LOWINCPCT,
+         UNEMPLOYED = UNEMPPCT,
+         LINGISO = LINGISOPCT,
+         LESSHS = LESSHSPCT,
+         UNDER5 = UNDER5PCT,
+         OVER64 = OVER64PCT) %>% 
+  
+  dplyr::select(GEOID, PEOPCOLOR,LOWINCOME,UNEMPLOYED, LINGISO,LESSHS,UNDER5,OVER64)
+
+demo <- demo %>%
+  left_join(dem, by = "GEOID")
+
+
+# # correlation check
+# png(file="./Fig/cor_tr.png", 
+#     units="in", width=5, height=5, res=300)
+# corrplot::corrplot(cor(demo %>% 
+#                          dplyr::select(-GEOID,-population), 
+#                        use = "pairwise.complete.obs"), method = "ellipse",
+#                    tl.cex = 0.7,tl.col = "black")
+# dev.off()
+# 
+# library(faraway)
+# png(file="./fig/vif_tr.png", 
+#     units="in", width=12, height=14, res=300)
+# barplot(vif(demo %>% 
+#               dplyr::select(-GEOID,-population)), main = "VIF Values", horiz = TRUE, col = "steelblue")
+# abline(v = 5, lwd = 3, lty = 2)
+# dev.off()
+
+
+# ### data compare 
+# d <- dem %>% 
+#   left_join(read_csv("./data/demographic_df_feats_tract.csv") %>%
+#               mutate(GEOID = ifelse(GEOID < 10001040100, paste0("0",GEOID), GEOID) %>%
+#                        as.character()), by = "GEOID")
+# 
+# a <- d %>% 
+#   ggplot(aes(x = PEOPCOLOR, y = nonwhite_percent)) +
+#   geom_point(size = 0.1) + 
+#   geom_abline(color = "red") +
+#   theme_classic()
+# 
+# b <- d %>% 
+#   ggplot(aes(x = LOWINCOME, y = lowincome_percent)) +
+#   geom_point(size = 0.1) + 
+#   geom_abline(color = "red") +
+#   theme_classic()
+# 
+# c <- d %>% 
+#   ggplot(aes(x = UNEMPLOYED, y = unempoyment_percent)) +
+#   geom_point(size = 0.1) + 
+#   geom_abline(color = "red") +
+#   theme_classic()
+# 
+# e <- d %>% 
+#   ggplot(aes(x = LESSHS, y = belowHS_percent)) +
+#   geom_point(size = 0.1) + 
+#   geom_abline(color = "red") +
+#   theme_classic()
+# 
+# f <- d %>% 
+#   ggplot(aes(x = UNDER5, y = under5_percent)) +
+#   geom_point(size = 0.1) + 
+#   geom_abline(color = "red") +
+#   theme_classic()
+# 
+# g <- d %>% 
+#   ggplot(aes(x = OVER64, y = above65_percent)) +
+#   geom_point(size = 0.1) + 
+#   geom_abline(color = "red") +
+#   theme_classic()
+# 
+# ggsave("./Fig/compare.png", ggarrange(a,b,c,e,f,g), width = 10, height = 5, dpi=300)
+
+
+demo_c <- read_csv("./data/demographic_df_feats_county.csv") %>% 
+  mutate(GEOID = ifelse(GEOID < 10001, paste0("0",GEOID), GEOID) %>%
+           as.character()) %>% 
+  dplyr::rename(POPDEN =populationdensity) %>% 
+  dplyr::select(GEOID, population, POPDEN) %>% 
+  
+  left_join(read_csv("../DAC/results/DAC_s.csv") %>% 
+              mutate(GEOID = substr(GEOID, start = 1, stop = 5)) %>% 
+              dplyr::select(GEOID, PEOPCOLORPCT,LOWINCPCT,UNEMPPCT,LINGISOPCT,LESSHSPCT,UNDER5PCT,OVER64PCT),
+            by = "GEOID") %>% 
+
+  group_by(GEOID) %>% 
+  # dplyr::summarise(ACSTOTPOP = sum(ACSTOTPOP),
+  #                  PEOPCOLOR = sum(PEOPCOLOR)/ACSTOTPOP,
+  #                  LOWINCOME = sum(LOWINCOME)/ACSTOTPOP,
+  #                  UNEMPLOYED = sum(UNEMPLOYED)/ACSTOTPOP,
+  #                  LINGISO = sum(LINGISO)/ACSTOTPOP,
+  #                  LESSHS = sum(LESSHS)/ACSTOTPOP,
+  #                  UNDER5 = sum(UNDER5)/ACSTOTPOP,
+  #                  OVER64 = sum(OVER64)/ACSTOTPOP) %>% 
+
+  dplyr::summarise(PEOPCOLOR = weighted.mean(PEOPCOLORPCT, population, rm.na = T),
+            LOWINCOME = weighted.mean(LOWINCPCT, population, rm.na = T),
+            UNEMPLOYED = weighted.mean(UNEMPPCT, population, rm.na = T),
+            LINGISO = weighted.mean(LINGISOPCT, population, rm.na = T),
+            LESSHS = weighted.mean(LESSHSPCT, population, rm.na = T),
+            UNDER5 = weighted.mean(UNDER5PCT, population, rm.na = T),
+            OVER64 = weighted.mean(OVER64PCT, population, rm.na = T),
+            population = mean(population),
+            POPDEN = mean(POPDEN)) %>%
+  
+  dplyr::select(GEOID,population, POPDEN, PEOPCOLOR,LOWINCOME,UNEMPLOYED, LINGISO,LESSHS,UNDER5,OVER64)
+
+# # correlation check
+# png(file="./Fig/cor_c.png", 
+#     units="in", width=5, height=5, res=300)
+# corrplot::corrplot(cor(demo_c %>% 
+#                          dplyr::select(-GEOID), 
+#                        use = "pairwise.complete.obs"), method = "ellipse",
+#                    tl.cex = 0.7,tl.col = "black")
+# dev.off()
+# 
+# library(faraway)
+# png(file="./fig/vif_c.png", 
+#     units="in", width=12, height=14, res=300)
+# barplot(vif(demo_c %>% 
+#               dplyr::select(-GEOID)), main = "VIF Values", horiz = TRUE, col = "steelblue")
+# abline(v = 5, lwd = 3, lty = 2)
+# dev.off()
+
+
+# for mapping
+dem_m <- tr.sf %>% 
+  dplyr::rename(GEOID = FIPS) %>% 
+  dplyr::select(GEOID) %>% 
+  left_join(demo, by = "GEOID") %>% 
+  dplyr::select(GEOID,population, relevant_variables_demographics)
+
