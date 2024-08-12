@@ -5,7 +5,7 @@
 ### seattle_tracts, temp,
 ### PV, EV, Pump,VPV,
 ### tr.sf
-load("../data/data.Rdata") 
+load("C:/Users/yohan/Big_data/Peer_effects/data/data.Rdata") 
 
 
 ### DAC 

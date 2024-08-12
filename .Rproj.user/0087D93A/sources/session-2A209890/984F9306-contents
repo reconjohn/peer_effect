@@ -2541,14 +2541,12 @@ seattle_tracts %>%
 temp %>% 
   st_drop_geometry() %>% 
   dplyr::select(HomeOwn,Edu,Income) %>% 
-  mutate_all(funs(./100)) %>% 
   as.data.frame() %>% 
   stargazer(type = "text")
 
 
 ### t3
 # regression
-
 fit <- glm(adopter ~ Year+Installed.Base+
              PopDensity+HomeOwn+SingleFamily+Edu+HomeValue+Income+White+      
              Poverty+Gini,
