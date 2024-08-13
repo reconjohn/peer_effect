@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/841255336.svg)](https://zenodo.org/doi/10.5281/zenodo.13312456)
 # Code for: "Spatial dynamics of peer effects in clean energy adoption across urban and rural U.S. communities"
 
 The following includes descriptions of data and code used for data analyses and visualizations for the paper titled, "Spatial dynamics of peer effects in clean energy adoption across urban and rural U.S. communities."
