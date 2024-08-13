@@ -1,6 +1,6 @@
-# Code for: "Peer effects in the adoption of rooftop solar, EVs, and heat pumps across urban and rural areas in the United States"
+# Code for: "Spatial dynamics of peer effects in clean energy adoption across urban and rural U.S. communities"
 
-The following includes descriptions of data, code, and functions used for data analyses and visualizations for the paper titled, "Peer effects in the adoption of rooftop solar, EVs, and heat pumps across urban and rural areas in the United States."
+The following includes descriptions of data and code used for data analyses and visualizations for the paper titled, "Spatial dynamics of peer effects in clean energy adoption across urban and rural U.S. communities."
 
 
 
