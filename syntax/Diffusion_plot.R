@@ -742,7 +742,7 @@ TP %>%
         axis.line.y = element_line(color="black"))
 
 
-ds <- 501
+ds <- 1000
 for(j in 1:4){
   
   if(j == 1){
@@ -764,7 +764,8 @@ for(j in 1:4){
   }
   
   tf <- df %>% 
-    st_drop_geometry()
+    st_drop_geometry()%>% 
+    mutate(Dist = factor(Dist))
   
   if(sum(tf$neighbor) < 2){ # if the number of neighbor is less than 2, then the estimation is spurious.
     next
@@ -774,19 +775,15 @@ for(j in 1:4){
       mutate_at(vars(neighbor), funs(scale(.) %>% as.numeric()))
   }
   
-  
-  fit <- glmer(adopter ~ neighbor +
-                 (1 |Dist), family = "binomial", data = tf)
-  
+  fit <- glm(adopter ~ neighbor, family = "binomial", data = tf)
   
   x <- 
     tf %>%                    
-    dplyr::select(neighbor, Dist) %>% 
+    dplyr::select(neighbor) %>% 
     summarize_all(mean) %>%
-    uncount(2) %>% # summarize the means for most variables (can't average Species)         # repeat the row 10 times
-    mutate(neighbor = c(0,1),
-           cont = 1,
-           Dist = 1
+    uncount(21) %>% # summarize the means for most variables (can't average Species)         # repeat the row 10 times
+    mutate(neighbor = seq(-1,1,by=0.1),
+           cont = 1
     ) %>% 
     relocate(cont)
   
@@ -800,13 +797,10 @@ for(j in 1:4){
   peGlm <- pe[1:2]
   vcGlm <- vcov(fit)
   simbetas <- mvrnorm(sims, peGlm, vcGlm) %>% 
-    as.data.frame() %>% 
-    mutate(Dist = ranef(fit)$Dist[[1]][8]) 
+    as.data.frame()
   
   
-  
-  xbeta <- x %>% 
-    as.matrix()%*% t(simbetas)
+  xbeta <- x %*% t(simbetas)
   
   inverse.logit <- function(xb){
     1/(1+exp(-xb))
@@ -815,18 +809,16 @@ for(j in 1:4){
   prob <-
     inverse.logit(xbeta)
   
-  prof <- prob[2,] - prob[1,]
-  prof <- as.data.frame(prof) %>% 
-    t()
   
-  pe <- apply(prof, 1, mean)
-  upper <- apply(prof, 1, quantile, probs= 0.95)
-  lower <- apply(prof, 1, quantile, probs= 0.05)
+  pe <- apply(prob, 1, mean)
+  upper <- apply(prob, 1, quantile, probs= 0.95)
+  lower <- apply(prob, 1, quantile, probs= 0.05)
   
   
   tp <- cbind(pe,upper,lower) %>% 
     as.data.frame() %>% 
-    mutate(tech = tc)
+    mutate(neighbor = seq(-1,1,by=0.1),
+           tech = tc)
   
   if(j == 1){ #only for EV i should be 100
     TP <- tp 
@@ -840,29 +832,22 @@ TP %>%
   as.data.frame() %>%
   mutate(tech = factor(tech, levels = c("PV (Seattle)", "PV (Vermont)", 
                                         "EV (Seattle)", "HP (Seattle)"))) %>% 
-  mutate_at(vars(pe, upper, lower), funs(.*100)) %>% 
+  mutate_at(vars(pe,upper,lower), funs(.*100-50)) %>%
+  # mutate_at(vars(pe,upper,lower), funs(.*100)) %>% 
   
-  ggplot() +
-  geom_errorbar(aes(x=tech, ymin=lower, ymax=upper), 
-                color = "gray30", width=0.1, alpha=0.9, size=0.7) +
-  geom_point(aes(y = pe, x = tech, color = tech), position = "dodge", size = 3, alpha = 0.9) +
-  
-  
-  labs(x = "", fill = "", y = "Standardized value\n",
-       title = "f") +
+  ggplot(aes(x = neighbor, y = pe, ymax = upper, ymin = lower, colour = tech, fill = tech)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.05, linetype = 0) +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(y = "Impact of one sd of neighbor installation\nincrease on adoption probability (%)", 
-       x = "",
+  
+  labs(y = "Probability of adoption\nrelative to non-adopters (%)", 
+       x = "Standard deviation of neighbor installations",
        fill = "",
-       color = "") +
+       color = "",
+       title = "F") +
   theme_classic() +
-  theme(legend.position = "none",
-        plot.background = element_blank(),
-        panel.grid.minor = element_blank(),
-        axis.line.x = element_line(color="black"),
-        axis.line.y = element_line(color="black"),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank())
+  theme(legend.position = "none")
+
 
 
 
